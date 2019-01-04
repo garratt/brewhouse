@@ -20,31 +20,38 @@ void PrettyTime() {
   printf("%s\n", s);
 }
 
-void GoUp(const char* serial = "") {
+
+// Reel the winch in, running for |ms| milliseconds.
+// the serial number can be specified using serial.
+void GoUp(uint32_t ms, const char* serial = "") {
    SetRelay(0, serial); // reset / set direction
    usleep(100000); // let the relay click around
    SetRelay(0x06, serial); // enable
-   usleep(200000); // run for 1.5 seconds
+   usleep(1000 * ms); // run for given amount of time
    SetRelay(0, serial); // reset / set direction
+   usleep(100000); // let the relay click around
 }
 
-void GoDown(const char* serial = "") {
+// Reel the winch out, running for |ms| milliseconds.
+// the serial number can be specified using serial.
+void GoDown(uint32_t ms, const char* serial = "") {
+   // SetRelay(0, serial); // reset / set direction
+   usleep(100000); // let the relay click around
+   SetRelay(0x09, serial); // set direction
+   usleep(100000); // let the relay click around
+   SetRelay(0x0f, serial); // enable
+   usleep(1000 * ms); // run for 1.5 seconds
    SetRelay(0, serial); // reset / set direction
    usleep(100000); // let the relay click around
-   SetRelay(0x01, serial); // set direction
-   usleep(100000); // let the relay click around
-   SetRelay(0x07, serial); // enable
-   usleep(200000); // run for 1.5 seconds
-   SetRelay(0, serial); // reset / set direction
 }
 
 // USAGE:
-// relay_test [L | [l | r] [u | d]]
+// relay_test [L | [l | r][u | d] <ms_to_run>]
 // L - list devices
 // l/r left or right winch
 // u/d up or down
-// Example: relay_test lu  
-//    To get make the left winch go up.
+// Example: relay_test lu 1000 
+//    To get make the left winch go up for 1 second.
 
 
 int main(int argc, char **argv) {
@@ -73,13 +80,20 @@ int main(int argc, char **argv) {
     index++;
   }
 
+  // Default to 200ms, which is ~8cm.
+  uint32_t ms = 200;  
+  if (argc > 2) {
+   int ms_in = atoi(argv[2]);
+   ms = (ms_in < 0) ? 0 : ms_in;
+  }
+
   if (argv[1][index] == 'u') {
-    GoUp(serial);
+    GoUp(ms, serial);
     return 0;
   }
 
   if (argv[1][index] == 'd') {
-    GoDown(serial);
+    GoDown(ms, serial);
     return 0;
   }
 
