@@ -27,6 +27,16 @@
 
 #define RIGHT_SLIDE_SWITCH 21
 
+#define CHILLER_PUMP 14
+#define VALVE_ENABLE 15
+#define CARBOY_VALVE 18
+#define CHILLER_VALVE 23
+#define KETTLE_VALVE 24
+
+
+#define SCALE_DATA 12
+#define SCALE_SCLK 20
+
 // #define str(s) #s
 // #define gpio_dir(pin) "/sys/class/gpio/gpio" str(pin) "/direction"
 // #define gpio_val(pin) "/sys/class/gpio/gpio" str(pin) "/value"
@@ -105,18 +115,102 @@ int ReadInput(uint8_t pin) {
    return 1;
 }
 
+enum FlowPath {NO_PATH, KETTLE, CHILLER, CARBOY};
+
+int SetFlow(FlowPath path) {
+  // Set up the valve config.  The output is active low
+  SetOutput(KETTLE_VALVE, (path != KETTLE));
+  SetOutput(CARBOY_VALVE, (path != CARBOY));
+  SetOutput(CHILLER_VALVE, (path != CHILLER));
+  SetOutput(VALVE_ENABLE, 0);
+  // The valve is guarenteed to finish in 5 seconds
+  sleep(5);
+  // disallow movement, then reset the relays:
+  SetOutput(VALVE_ENABLE, 1);
+  SetOutput(KETTLE_VALVE, 1);
+  SetOutput(CARBOY_VALVE, 1);
+  SetOutput(CHILLER_VALVE, 1);
+  return 0;
+}
 
 int InitIO() {
   if (SetDirection(LEFT_WINCH_ENABLE, 1, 0)) return -1;
   if (SetDirection(RIGHT_WINCH_ENABLE, 1, 0)) return -1;
   if (SetDirection(LEFT_WINCH_DIRECTION, 1, 0)) return -1;
   if (SetDirection(RIGHT_WINCH_DIRECTION, 1, 0)) return -1;
+  if (SetDirection(CHILLER_PUMP, 1, 1)) return -1;
+  if (SetDirection(VALVE_ENABLE, 1, 1)) return -1;
+  if (SetDirection(CARBOY_VALVE, 1, 1)) return -1;
+  if (SetDirection(CHILLER_VALVE, 1, 1)) return -1;
+  if (SetDirection(KETTLE_VALVE, 1, 1)) return -1;
   if (SetDirection(SET_BUTTON, 0)) return -1;
   if (SetDirection(PUMP_BUTTON, 0)) return -1;
   if (SetDirection(SPEAKER_IN, 0)) return -1;
   if (SetDirection(RIGHT_SLIDE_SWITCH, 0)) return -1;
+  if (SetDirection(SCALE_DATA, 0)) return -1;
+  if (SetDirection(SCALE_SCLK, 1, 0)) return -1;
+  // SetFlow(NO_PATH);
   return 0;
 }
+
+
+static constexpr int kHX711ResponseLength = 25;
+
+double Read_HX711(uint8_t data_pin = SCALE_DATA, uint8_t sclk = SCALE_SCLK) {
+  uint32_t ret = 0;
+  // The HX711 communicates by pulling the data line low every N Hz.
+  // Wait for the Data line to be pulled low:
+  // TODO: make sure we can leave the conversions running without reading.
+  // otherwise, we can power down between reads.
+  int rval = 0;
+  do {
+    // The time between conversions is 100ms (at 10 hz), and data won't come
+    // until we strobe the clock, so we can poll pretty infrequently...
+    usleep(1000);  
+    int trval = ReadInput(data_pin);
+    printf(" %d ", trval);
+    if (trval < 0) { rval = trval; break;}
+    if (trval) { 
+      rval = 0;
+    } else {
+      rval++;
+    }
+  } while (rval < 10 );
+  if (rval < 0) {
+    printf("Failed to read data input\n");
+    return ret;
+  }
+   int sclk_fd = open(gpio_val(sclk), O_RDWR);
+   if (!sclk_fd) {
+     printf("Failed to open %s\n", gpio_val(sclk));
+     return -1;
+   }
+  // Pulse the sclk line at period of 2 us.  The rising edge triggers
+  // the next bit to be available on data line, so read on the falling edge.
+  // timespec sleep_time = { .tv_sec = 0, . tv_nsec = 100}, rem;
+  for (int i = 0; i < kHX711ResponseLength; ++i) {
+    // Pull higha
+    write(sclk_fd, "1", 1);
+    // SetOutput(sclk, 1);
+    for (int j = 0; j < 10; ++j) {
+      asm("nop");
+    }
+    write(sclk_fd, "0", 1);
+    // nanosleep(&sleep_time, &rem);
+    // SetOutput(sclk, 0);
+    rval = ReadInput(data_pin);
+    if (rval < 0) {
+      printf("Failed to read data input\n");
+      return ret;
+    }
+    ret += rval; // rval will be 0 or 1
+    ret = ret << 1;  // TODO: check endianness in datasheet
+    // usleep(1);
+  }
+  close(sclk_fd);
+  return double(66702942 - ret) * 0.000026652;
+}
+
 
 
 #define RIGHT 0
@@ -248,7 +342,7 @@ int MoveToSink() {
   // }
 
   // Now we are over the sink, lower away!
-  return RightGoDown(3000);
+  return RightGoDown(3500);
 }
 
 int LowerHops() {
@@ -259,20 +353,12 @@ int RaiseHops() {
   return LeftGoUp(2500);  // go up a little less than we went down
 }
 
-enum FlowPath { KETTLE, CHILLER, CARBOY};
-
-int SetFlow(FlowPath path) {
-  // TODO
-  return 0;
-}
 
 int ActivateChillerPump() {
-  // TODO
-  return 0;
+  return SetOutput(CHILLER_PUMP, 0);
 }
 int DeactivateChillerPump() {
-  // TODO
-  return 0;
+  return SetOutput(CHILLER_PUMP, 1);
 }
 
 int HitButton(uint8_t button) {
@@ -444,6 +530,26 @@ void RunTestCommand(int argc, char **argv) {
     return;
   }
 
+  if (argv[1][0] == 'H') {
+    double val = Read_HX711();
+    printf("Scale Reads %f\n", val);
+    return;
+  }
+
+  if (argv[1][0] == 'V') {
+    HitButton(PUMP_BUTTON);
+    SetFlow(KETTLE);
+    sleep(10);
+    SetFlow(CHILLER);
+    sleep(18);
+    SetFlow(CARBOY);
+    sleep(10);
+    SetFlow(NO_PATH);
+    HitButton(PUMP_BUTTON);
+    return;
+  }
+
+
   if (argv[1][0] == 'L') {
     ListenForBeeps();
     return;
@@ -514,49 +620,57 @@ void RunTestCommand(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-  InitIO();
+  if(InitIO() < 0) {
+    printf("Failed during initialization. Make sure you can write to all gpios!\n");
+  }
 
   if (argc > 1) {
     RunTestCommand(argc, argv);
     return 0;
   }
+  bool do_waits = false;
 
-  if (WaitForMashStart()) return -1;
+  printf("Waiting for mash to start...\n");
+  if (WaitForMashStart() < 0) return -1;
+  printf("Mash at Temp. Waiting for Mash to Finish.\n");
   // TODO: time how long mash takes
 
   // Wait for Mash to be done
-  if (WaitForBeeping()) return -1;
-  // Mash is Done! Lift and let drain
-  if(RaiseToDrain()) return -1;
-  //TODO: Wait for 30 minutes
-
+  if (WaitForBeeping() < 0) return -1;
+  
+  printf("Mash is Done! Lift and let drain\n");
+  if(RaiseToDrain() < 0) return -1;
+  if (do_waits) WaitMinutes(30);
   // Draining done.
-  // SkipToBoil();
+  
+  printf("Skip to Boil\n");
   HitButton(SET_BUTTON);
 
-  if(MoveToSink()) return -1;
+  if(MoveToSink() < 0) return -1;
 
   // Wait for beeping, which indicates boil reached
-  if (WaitForBeeping()) return -1;
+  if (WaitForBeeping() < 0) return -1;
+  printf("Boil Reached\n");
 
-  if (LowerHops()) return -1;
+  if (LowerHops() < 0) return -1;
 
   HitButton(PUMP_BUTTON);
-  WaitMinutes(45);
+  if (do_waits) WaitMinutes(45);
 
   SetFlow(CHILLER);
 
   // TODO: wait for 10 minutes
-  WaitMinutes(10);
+  if (do_waits) WaitMinutes(10);
 
   SetFlow(CARBOY);
   //Wait for 2 minutes
-  WaitMinutes(2);
+  if (do_waits) WaitMinutes(2);
 
   SetFlow(KETTLE);
 
   // Wait for boil to complete:
   WaitForBeeping();
+  printf("Boil Done\n");
 
   RaiseHops();
 
@@ -564,18 +678,20 @@ int main(int argc, char **argv) {
   ActivateChillerPump();
   HitButton(PUMP_BUTTON);
 
+  printf("Cooling Wort\n");
   // Wait for 20 minutes
-  WaitMinutes(20);
+  if (do_waits) WaitMinutes(20);
 
   HitButton(PUMP_BUTTON);
   DeactivateChillerPump();
   // Wait for a minute
-  WaitMinutes(1);
+  if (do_waits) WaitMinutes(1);
 
+  printf("Decanting Wort into Carboy\n");
   // Decant:
   SetFlow(CARBOY);
   HitButton(PUMP_BUTTON);
-  WaitMinutes(20);
+  if (do_waits) WaitMinutes(20);
   // Wait for 20 minutes
   // TODO: Yikes!  Need a way to know when we are done!
   HitButton(PUMP_BUTTON);
