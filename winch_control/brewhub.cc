@@ -245,9 +245,13 @@ class WeightFilter {
   static constexpr uint32_t kNumberOfReadings = 30;
   bool verbose_ = false;
   std::vector<int> raw_data_;
+  double average_, average_sigma_;
+  std::vector<double> sigma_;
+  std::vector<bool> excluded_;
 
   int CollectRawData(int num_readings) {
     raw_data_.clear();
+    excluded_.clear();
       for (int i  = 0; i < num_readings; ++i) {
         WaitForHX711();
         int val = ReadHX711Data();
@@ -262,10 +266,47 @@ class WeightFilter {
           --i;
         } else {
            raw_data_.push_back(val);
+           excluded_.push_back(false);
         }
       }
+      sigma_.resize(raw_data_.size());
       return 0;
   }
+
+  void CalculateStats() {
+    double total = 0;
+    unsigned int unexcluded_count = 0;
+    for (unsigned int i = 0; i < raw_data_.size(); ++i) {
+      if (!excluded_[i]) {
+        total += raw_data_[i];
+        unexcluded_count++;
+      }
+    }
+    average_ = total / unexcluded_count;
+    // Now calculate sigma:
+    double total_sigmas = 0;
+    for (unsigned int i = 0; i < raw_data_.size(); ++i) {
+      sigma_[i] = (raw_data_[i]-average_) * (raw_data_[i] - average_);
+      if (!excluded_[i]) {
+        total_sigmas += sigma_[i];
+      }
+    }
+    average_sigma_ = total_sigmas / unexcluded_count;
+  }
+
+  int FindMaxSigma() {
+    double max_sigma = 0;
+    unsigned int max_index = 0;
+    for (unsigned int i = 0; i < raw_data_.size(); ++i) {
+        if (!excluded_[i] && max_sigma < sigma_[i]) {
+          max_sigma = sigma_[i];
+          max_index = i;
+        }
+    }
+    return max_index;
+  }
+
+
   public:
 
   // Initialize with calibration.  Creates file otherwise, and writes to it on
@@ -288,39 +329,33 @@ class WeightFilter {
     if (raw_data_.size() == 1) return raw_data_[0];
     if (raw_data_.size() == 2) return (raw_data_[0] + raw_data_[1]) / 2;
 
-    double total = 0;
-    for (double d : raw_data_) {
-      total+=d;
-    }
-    double average = total / raw_data_.size();
-    // Now calculate sigma:
-    std::vector<double> sigmas;
-    double total_sigmas = 0;
-    for (double d : raw_data_) {
-      sigmas.push_back((d-average) * (d - average));
-      total_sigmas += sigmas.back();
-    }
-    double average_sigma = total_sigmas / raw_data_.size();
+    int unexcluded_count;
+    double dev;
+    CalculateStats();
+    do {
+      int index = FindMaxSigma();
+      dev = sigma_[index];
+      excluded_[index] = true;
+      unexcluded_count = 0;
+      for (unsigned int i = 0; i < raw_data_.size(); ++i) {
+        if(!excluded_[i])
+      printf("%02d raw: %i  sigma %8.4f    ave: %8.4f   ave sigma:  %8.4f  dev: %8.4f %s\n", i,
+             raw_data_[i], sigma_[i], average_, average_sigma_, sigma_[i] / average_sigma_,
+             excluded_[i] ? "    (Excluded)" : "");
+      if (!excluded_[i]) unexcluded_count++;
+      }
+      printf("  Excluding %d\n", index);
+      CalculateStats();
+
+    } while (average_sigma_ > 100000 || dev > 100000);
     // Kick out any point with sigma > 3* average sigma
     // and by kick out, I mean don't average them into the return value.
-    double ret = 0;
-    int averaging_count = 0;
-    for (unsigned int i = 0; i < raw_data_.size(); ++i) {
-      printf("raw: %i  sigma %8.4f    ave: %8.4f   ave sigma:  %8.4f  dev: %8.4f",
-             raw_data_[i], sigmas[i], average, average_sigma, sigmas[i] / average_sigma);
-      if (sigmas[i] < 1.2 * average_sigma) {
-        ret += raw_data_[i];
-        averaging_count++;
-        printf("\n");
-      } else {
-        printf("  Excluded!\n");
-      }
-    }
-    if (averaging_count == 0) {
+    
+    if (unexcluded_count == 0) {
       printf("No non outliers.  This shouldn't be possible...\n");
       return kErrorSentinelValue;
     }
-    return ret / averaging_count;
+    return average_;
   }
 
 
