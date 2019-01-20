@@ -1,4 +1,7 @@
-all: relay_test
+all: brewhub sheets_test
 
-relay_test: relay.h relay_test.cc
-	g++ relay_test.cc -g -std=c++11  -Wall -lftdi -o relay_test
+brewhub: gpio.h grainfather.h logger.h relay.h scale.h valves.h winch.h brewhub.cc
+	g++ brewhub.cc -g -std=c++11 -Wall -I../third_party/rapidjson/include -lftdi -lcurl -o brewhub
+
+sheets_test: logger.h sheets_test.cc
+	g++ sheets_test.cc -g -std=c++11 -Wall -I../third_party/rapidjson/include -lcurl -o sheets_test

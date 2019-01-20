@@ -21,6 +21,7 @@
 #include "scale.h"
 #include "valves.h"
 #include "winch.h"
+#include "logger.h"
 
 
 void WaitMinutes(uint32_t minutes) {
@@ -148,6 +149,25 @@ void RunTestCommand(int argc, char **argv) {
   }
 
 }
+
+
+
+class BrewManager {
+ public:
+  void WaitForMashStart() {}
+  void WaitForMashComplete() {}
+   
+
+
+
+
+};
+
+
+
+
+
+
 
 int main(int argc, char **argv) {
   if(InitIO() < 0) {
