@@ -32,7 +32,17 @@
 //  - check for beeps (every ms)
 //
 
-
+// Manages the physical properties of the brewhub setup.
+class GrainfatherSetup {
+ static constexpr double kGrainfatherKettle_grams = 2000; // TODO: determine this!
+ static constexpr double kMashTun_grams = 1000; // TODO: determine this!
+ public:
+   double GetVolumeL(double weight_grams, bool has_tun, double specific_gravity = 1.00) {
+     double tare = kGrainfatherKettle_grams + has_tun ? kMashTun_grams : 0;
+     return (weight_grams - tare) / (1000.0 * specific_gravity);  // Kg to Liters is easy
+   }
+   // TODO: put dimentions of the setup for estimating winch times.
+};
 
 
 class BrewManager {
@@ -111,7 +121,7 @@ class BrewManager {
     // TODO: calculate water volume
     return ret;
   }
-  
+
   int WaitForBeeping(uint32_t minutes) {
     interrupt_trigger_ = InterruptTrigger::CONTINUOUS_BEEP;
     return WaitForInput(60 * minutes);  // 5 hours, including heating time

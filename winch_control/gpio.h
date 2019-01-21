@@ -17,22 +17,22 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define LEFT_WINCH_ENABLE 5
-#define LEFT_WINCH_DIRECTION 6
-#define RIGHT_WINCH_ENABLE 2
-#define RIGHT_WINCH_DIRECTION 3
+#define LEFT_WINCH_ENABLE 8
+#define LEFT_WINCH_DIRECTION 11
+#define RIGHT_WINCH_ENABLE 10
+#define RIGHT_WINCH_DIRECTION 9
 
-#define SET_BUTTON 25
-#define PUMP_BUTTON 8
-#define SPEAKER_IN 1
+#define SET_BUTTON 15
+#define PUMP_BUTTON 24
+#define SPEAKER_IN 14
 
-#define RIGHT_SLIDE_SWITCH 21
+#define RIGHT_SLIDE_SWITCH 22
 
-#define CHILLER_PUMP 14
-#define VALVE_ENABLE 15
-#define CARBOY_VALVE 18
-#define CHILLER_VALVE 23
-#define KETTLE_VALVE 24
+#define CHILLER_PUMP 2
+#define VALVE_ENABLE 3
+#define CARBOY_VALVE 4
+#define CHILLER_VALVE 27
+#define KETTLE_VALVE 21
 
 
 #define SCALE_DATA 12
