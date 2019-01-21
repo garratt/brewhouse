@@ -24,11 +24,193 @@
 #include "logger.h"
 
 
-void WaitMinutes(uint32_t minutes) {
-  time_t begin = time(NULL);
+
+// All waiting involves:
+//  - communicating with the scale (check every ms)
+//  - a full weigh takes about 3 seconds (30 readings at 10 hz)
+//  - reading the scale can take up to 2.5ms, but is usually less than 1ms.
+//  - check for beeps (every ms)
+//
+
+
+
+
+class BrewManager {
+ BeepTracker beep_tracker_;
+ BrewLogger brewlogger_;
+ WeightFilter weight_filter_;
+ enum InterruptTrigger { NONE, LONG_BEEP, CONTINUOUS_BEEP, TIMER, WEIGHT};
+ InterruptTrigger interrupt_trigger_;
+ double weight_trigger_level_;
+ public:
+  BrewManager(const char *brew_session) : brewlogger_(brew_session),
+                                          weight_filter_("scale_calibration.txt") {}
+
+  // waits for beeps and scale
+  // returns 0 if the function stops for the correct reason (trigger event)
+  int WaitForInput(uint32_t timeout_sec) {
+    time_t begin = time(NULL);
+    do {
+      usleep(1000);
+      // Checks if the speaker is currently signalled.  Records the length
+      // of a signal, and returns the beep length when the beep stops.
+      // Also flags if the long "mash ready" beep occurrs, or if continous
+      // beeping is detected.
+      auto beep_status = beep_tracker_.CheckBeep();
+      // Checks if new weight is available.  If it is, the weight is
+      // read out (takes about 1 ms).  If there are enough readings, the
+      // readings are filtered and a weight is produced.
+      auto weight_status = weight_filter_.CheckWeight();
+      if (HandleStatusUpdate(beep_status, weight_status)) {
+        return 0;
+      }
+    } while (difftime(time(NULL), begin) < timeout_sec);
+    // if we were waiting for a fixed amount of time, return 0.
+    if (interrupt_trigger_ == InterruptTrigger::TIMER) {
+      return 0;
+    }
+    return 1;
+  }
+  
+  // Returns true if we should transition
+  bool HandleStatusUpdate(BeepStatus beep_status, ScaleStatus scale_status) {
+    // Log any beep:
+    char status_msg[300];
+    if (beep_status.state & (BeepStatus::SHORT | BeepStatus::LONG | BeepStatus::CONTINUOUS)) {
+      sprintf(status_msg, "Beep for %u ms.", beep_status.length);
+      brewlogger_.Log(1, status_msg);
+    }
+    // Log any weight:
+    if (scale_status.state & ScaleStatus::READY) {
+      brewlogger_.LogWeight(scale_status.weight);
+      if (interrupt_trigger_ == InterruptTrigger::WEIGHT && 
+          scale_status.weight < weight_trigger_level_) {
+         sprintf(status_msg, "Weight of %f < %f, transition triggered.",
+                 scale_status.weight, weight_trigger_level_);
+         brewlogger_.Log(1, status_msg);
+         return true;
+      }
+    }
+    if ((beep_status.state & BeepStatus::LONG) && interrupt_trigger_ == InterruptTrigger::LONG_BEEP) {
+         brewlogger_.Log(1, "Transition triggerd by long beep");
+         return true;
+    }
+    if ((beep_status.state & BeepStatus::CONTINUOUS) &&
+        interrupt_trigger_ == InterruptTrigger::CONTINUOUS_BEEP) {
+         brewlogger_.Log(1, "Transition triggerd by CONTINUOUS_BEEP");
+         return true;
+    }
+    return false;
+  }
+
+  int WaitForMashTemp() {
+    interrupt_trigger_ = InterruptTrigger::LONG_BEEP;
+    int ret = WaitForInput(60 * 60 * 3);  // Wait for up to 3 hours
+    // TODO: Log mash started on overview page
+    // This is a good measure of all the water we are mashing with
+    // TODO: calculate water volume
+    return ret;
+  }
+  
+  int WaitForBeeping(uint32_t minutes) {
+    interrupt_trigger_ = InterruptTrigger::CONTINUOUS_BEEP;
+    return WaitForInput(60 * minutes);  // 5 hours, including heating time
+  }
+
+  int WaitMinutes(uint32_t minutes) {
+    interrupt_trigger_ = InterruptTrigger::TIMER;
+    return WaitForInput(60 * minutes);
+  }
+
+  int WaitForEmpty(double weight, uint32_t minutes) {
+    interrupt_trigger_ = InterruptTrigger::WEIGHT;
+    weight_trigger_level_ = weight;
+    return WaitForInput(60 * minutes);
+  }
+
+
+
+  int RunBrewSession() {
+    if (WaitForMashTemp()) {
+      return -1;
+    }
+    // Wait for mash to complete
+    if (WaitForBeeping(5 * 60)) {
+      return -1;
+    }
+
+    printf("Mash is Done! Lift and let drain\n");
+    if(RaiseToDrain() < 0) return -1;
+
+    if (WaitMinutes(30)) return -1;
+    // Draining done.
+
+    printf("Skip to Boil\n");
+    HitButton(SET_BUTTON);
+
+    if(MoveToSink() < 0) return -1;
+
+    // Wait for beeping, which indicates boil reached
+    if (WaitForBeeping(90)) return -1;
+    printf("Boil Reached\n");
+
+    if (LowerHops() < 0) return -1;
+
+    HitButton(PUMP_BUTTON);
+    if (WaitMinutes(45)) return -1;
+
+    // Run boiling wort through chiller to sterilize it
+    SetFlow(CHILLER);
+
+    // TODO: wait for 10 minutes
+    if (WaitMinutes(10)) return -1;
+    SetFlow(KETTLE);
+
+    // Wait for boil to complete:
+    if (WaitForBeeping(60)) return -1;
+    printf("Boil Done\n");
+
+    RaiseHops();
+
+    SetFlow(CHILLER);
+    ActivateChillerPump();
+    HitButton(PUMP_BUTTON);
+
+    printf("Cooling Wort\n");
+    // Wait for 20 minutes
+    if (WaitMinutes(20)) return -1;
+
+    HitButton(PUMP_BUTTON);
+    DeactivateChillerPump();
+
+    printf("Decanting Wort into Carboy\n");
+    // Decant:
+    SetFlow(CARBOY);
+    HitButton(PUMP_BUTTON);
+    if (WaitForEmpty(3000, 30)) return -1;
+    HitButton(PUMP_BUTTON);
+  }
+
+
+};
+
+
+
+
+#if 0
+
+int WaitForBeeping() {
+  BeepTracker bt;
+  int ret;
   do {
-    sleep(10);
-  } while (difftime(begin, time(NULL)) < minutes * 60);
+    usleep(1000);
+    auto status = bt.CheckBeep();
+    ret = (status.state == BeepStatus::CONTINUOUS);
+  } while (ret == 0);
+  if (ret > 0) {
+    HitButton(SET_BUTTON);
+  }
+  return ret;
 }
 
 void Test_GrainfatherInterface() {
@@ -63,6 +245,7 @@ void Test_GrainfatherInterface() {
   printf("Boil Done\n");
 }
 
+#endif
 
 void RunTestCommand(int argc, char **argv) {
   if (argc < 2) return;
@@ -77,10 +260,10 @@ void RunTestCommand(int argc, char **argv) {
     return;
   }
 
-  if (argv[1][0] == 'd') {
-    Test_GrainfatherInterface();
-    return;
-  }
+  // if (argv[1][0] == 'd') {
+    // Test_GrainfatherInterface();
+    // return;
+  // }
 
   if (argv[1][0] == 'H') {
     WeightFilter wf("./calibration.txt");
@@ -103,10 +286,10 @@ void RunTestCommand(int argc, char **argv) {
   }
 
 
-  if (argv[1][0] == 'L') {
-    Test_ListenForBeeps();
-    return;
-  }
+  // if (argv[1][0] == 'L') {
+    // Test_ListenForBeeps();
+    // return;
+  // }
 
   if (argv[1][0] == '1') {
     RaiseToDrain();
@@ -152,23 +335,6 @@ void RunTestCommand(int argc, char **argv) {
 
 
 
-class BrewManager {
- public:
-  void WaitForMashStart() {}
-  void WaitForMashComplete() {}
-   
-
-
-
-
-};
-
-
-
-
-
-
-
 int main(int argc, char **argv) {
   if(InitIO() < 0) {
     printf("Failed during initialization. Make sure you can write to all gpios!\n");
@@ -178,79 +344,8 @@ int main(int argc, char **argv) {
     RunTestCommand(argc, argv);
     return 0;
   }
-  bool do_waits = false;
 
-  printf("Waiting for mash to start...\n");
-  if (WaitForMashStart() < 0) return -1;
-  printf("Mash at Temp. Waiting for Mash to Finish.\n");
-  // TODO: time how long mash takes
-
-  // Wait for Mash to be done
-  if (WaitForBeeping() < 0) return -1;
-  
-  printf("Mash is Done! Lift and let drain\n");
-  if(RaiseToDrain() < 0) return -1;
-  if (do_waits) WaitMinutes(30);
-  // Draining done.
-  
-  printf("Skip to Boil\n");
-  HitButton(SET_BUTTON);
-
-  if(MoveToSink() < 0) return -1;
-
-  // Wait for beeping, which indicates boil reached
-  if (WaitForBeeping() < 0) return -1;
-  printf("Boil Reached\n");
-
-  if (LowerHops() < 0) return -1;
-
-  HitButton(PUMP_BUTTON);
-  if (do_waits) WaitMinutes(45);
-
-  SetFlow(CHILLER);
-
-  // TODO: wait for 10 minutes
-  if (do_waits) WaitMinutes(10);
-
-  SetFlow(CARBOY);
-  //Wait for 2 minutes
-  if (do_waits) WaitMinutes(2);
-
-  SetFlow(KETTLE);
-
-  // Wait for boil to complete:
-  WaitForBeeping();
-  printf("Boil Done\n");
-
-  RaiseHops();
-
-  SetFlow(CHILLER);
-  ActivateChillerPump();
-  HitButton(PUMP_BUTTON);
-
-  printf("Cooling Wort\n");
-  // Wait for 20 minutes
-  if (do_waits) WaitMinutes(20);
-
-  HitButton(PUMP_BUTTON);
-  DeactivateChillerPump();
-  // Wait for a minute
-  if (do_waits) WaitMinutes(1);
-
-  printf("Decanting Wort into Carboy\n");
-  // Decant:
-  SetFlow(CARBOY);
-  HitButton(PUMP_BUTTON);
-  if (do_waits) WaitMinutes(20);
-  // Wait for 20 minutes
-  // TODO: Yikes!  Need a way to know when we are done!
-  HitButton(PUMP_BUTTON);
-  return -1;
 }
-
-
-
-
 
 
 

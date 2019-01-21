@@ -88,6 +88,14 @@ double ReadHX711Data(uint8_t data_pin = SCALE_DATA, uint8_t sclk = SCALE_SCLK) {
 #include <fstream>
 #include <vector>
 
+struct ScaleStatus {
+   static constexpr unsigned NONE = 0;
+   static constexpr unsigned ERROR = 0x01;
+   static constexpr unsigned READY = 0x02;
+   unsigned state = 0;
+   double weight = 0;
+};
+
 class WeightFilter {
   double offset_ = 0, scale_ = 0;
   const char *calibration_file_;
@@ -99,10 +107,11 @@ class WeightFilter {
   double average_, average_sigma_;
   std::vector<double> sigma_;
   std::vector<bool> excluded_;
+  time_t last_data_ = 0;
 
   int CollectRawData(int num_readings) {
     raw_data_.clear();
-    excluded_.clear();
+    // excluded_.clear();
       for (int i  = 0; i < num_readings; ++i) {
         WaitForHX711();
         int val = ReadHX711Data();
@@ -117,10 +126,10 @@ class WeightFilter {
           --i;
         } else {
            raw_data_.push_back(val);
-           excluded_.push_back(false);
+           // excluded_.push_back(false);
         }
       }
-      sigma_.resize(raw_data_.size());
+      // sigma_.resize(raw_data_.size());
       return 0;
   }
 
@@ -175,6 +184,9 @@ class WeightFilter {
 
 
   double RemoveOutlierData() {
+    excluded_.clear();
+    excluded_.resize(raw_data_.size(), false); 
+    sigma_.resize(raw_data_.size());
     // Need three points for an outlier to exist.
     if (raw_data_.size() == 0) return 0;
     if (raw_data_.size() == 1) return raw_data_[0];
@@ -204,8 +216,11 @@ class WeightFilter {
     
     if (unexcluded_count == 0) {
       printf("No non outliers.  This shouldn't be possible...\n");
+      raw_data_.clear();
       return kErrorSentinelValue;
     }
+
+    raw_data_.clear();
     return average_;
   }
 
@@ -243,26 +258,70 @@ class WeightFilter {
     return 0;
   }
 
-    // Take in a raw data reading and return a filtered value
-    // 1) Filter erroneous readings
-    //    If the time between readings is short and the reading is wildly different,
-    //    throw it out.
-    // 2) Average out noise
-    //    Until proven that the noise is not gaussian, assume it is and just average the 
-    //    last N readings (within a time period)
-    // 3) Apply scale and offset from calibration
+  // Take in a raw data reading and return a filtered value
+  // 1) Filter erroneous readings
+  //    If the time between readings is short and the reading is wildly different,
+  //    throw it out.
+  // 2) Average out noise
+  //    Until proven that the noise is not gaussian, assume it is and just average the
+  //    last N readings (within a time period)
+  // 3) Apply scale and offset from calibration
 
-    // Take a number of readings, average.
-    double GetWeight(bool verbose = false) {
-      verbose_ = verbose;
-      if(CollectRawData(kNumberOfReadings)) {
-        printf("Failed to collect raw data\n");
-        return kErrorSentinelValue;
-      }
-      double average = RemoveOutlierData();
-      printf("average: %f   ", average);
-      return scale_ * (average - offset_);
+  // Take a number of readings, average.
+  double GetWeight(bool verbose = false) {
+    verbose_ = verbose;
+    if(CollectRawData(kNumberOfReadings)) {
+      printf("Failed to collect raw data\n");
+      return kErrorSentinelValue;
     }
+    double average = RemoveOutlierData();
+    printf("average: %f   ", average);
+    return scale_ * (average - offset_);
+  }
+
+  // Checks if new weight is available.  If it is, the weight is
+  // read out (takes about 1 ms).  If there are enough readings, the
+  // readings are filtered and a weight is produced.
+  ScaleStatus CheckWeight() {
+    ScaleStatus status;
+    int val = ReadInput(SCALE_DATA);
+    if (val < 0) {
+       status.state = ScaleStatus::ERROR;
+       return status;
+    }
+    if (val > 0){
+       status.state = ScaleStatus::NONE;
+       return status;
+    }
+    // else, val == 0, so speaker is on (active low)
+    // Read the scale data
+    val = ReadHX711Data();
+    if (val < 0) {
+      printf("Error Reading Scale!\n");
+      status.state = ScaleStatus::ERROR;
+      return status;
+    }
+    // Now, process the data.
+    // Wait for kNumberOfReadings.
+    // clears if it has been more than 2 seconds since we got the last reading.
+    // at two seconds, this makes the whole sampling time up to 1 minute.
+    if (difftime(time(NULL), last_data_) > 2) {
+      raw_data_.clear();
+    }
+    last_data_ = time(NULL);
+    raw_data_.push_back(val);
+    if (raw_data_.size() < kNumberOfReadings) {
+       status.state = ScaleStatus::NONE;
+       return status;
+    }
+
+    // We have enough recent data, filter and return the reading
+    double average = RemoveOutlierData();
+    status.weight =  scale_ * (average - offset_);
+    status.state = ScaleStatus::READY;
+    return status;
+  }
+
 };
 
 

@@ -22,6 +22,16 @@ int HitButton(uint8_t button) {
   return 0;
 }
 
+struct BeepStatus {
+   static constexpr unsigned NONE = 0;
+   static constexpr unsigned ERROR = 0x01;
+   static constexpr unsigned CONTINUOUS = 0x02;
+   static constexpr unsigned LONG = 0x04;
+   static constexpr unsigned SHORT = 0x08;
+   unsigned state = 0;
+   unsigned length = 0;
+};
+
 class BeepTracker {
   uint64_t start_ = 0, stop_ = 0, prev_start_ = 0, prev_stop_ = 0;
   int prev_val_ = 1;
@@ -43,10 +53,21 @@ class BeepTracker {
     return false;
   }
 
+  bool IsContinous() {
+    if (!IsClose(stop_ - start_, 500)) return false;
+    if (!IsClose(start_ - prev_stop_, 500)) return false;
+    if (!IsClose(prev_stop_ - prev_start_, 500)) return false;
+    return true;
+  }
+
   public:
-    int CheckBeep() {
+    BeepStatus CheckBeep() {
+      BeepStatus bs;
       int val = ReadInput(SPEAKER_IN);
-      if (val < 0) { return -1; }
+      if (val < 0) {
+        bs.state = BeepStatus::ERROR;
+        return bs;
+      }
       // just turned on:
       int change = val - prev_val_;
       prev_val_ = val;
@@ -58,9 +79,18 @@ class BeepTracker {
       if (change > 0) {
         prev_stop_ = stop_;
         stop_ = GetTime();
-        return stop_ - start_;
+        bs.length = stop_ - start_;
+        bs.state = BeepStatus::SHORT;
+        if (IsContinous()) {
+          bs.state = BeepStatus::CONTINUOUS;
+        }
+        if (IsClose(stop_ - start_, 1500)) {
+          bs.state = BeepStatus::LONG;
+        }
+        return bs;
       }
-      return 0;
+        bs.state = BeepStatus::NONE;
+        return bs;
     }
 
   BeepTracker() {
@@ -69,64 +99,39 @@ class BeepTracker {
     initial_seconds_ = t.tv_sec;
   }
 
-    int CheckContinous() {
-      int val = CheckBeep();
-      if (val <= 0) return val;
+    // int CheckContinous() {
+      // int val = CheckBeep();
+      // if (val <= 0) return val;
       // val > 0.
       // Critera for Continous beep: 500ms on, 500ms off, 500ms on
-      if (!IsClose(stop_ - start_, 500)) return 0;
-      if (!IsClose(start_ - prev_stop_, 500)) return 0;
-      if (!IsClose(prev_stop_ - prev_start_, 500)) return 0;
-      return 1;
-    }
+      // if (!IsClose(stop_ - start_, 500)) return 0;
+      // if (!IsClose(start_ - prev_stop_, 500)) return 0;
+      // if (!IsClose(prev_stop_ - prev_start_, 500)) return 0;
+      // return 1;
+    // }
 
-    int CheckLongBeep() {
-      int val = CheckBeep();
-      if (val <= 0) return val;
-      if (IsClose(stop_ - start_, 1500)) {
-        return 1;
-      }
-      return 0;
-    }
+    // int CheckLongBeep() {
+      // int val = CheckBeep();
+      // if (val <= 0) return val;
+      // if (IsClose(stop_ - start_, 1500)) {
+        // return 1;
+      // }
+      // return 0;
+    // }
 };
 
 
-int WaitForMashStart() {
-  // Wait for Long beep
-  BeepTracker bt;
-  int ret;
-  do {
-    usleep(1000);
-    ret = bt.CheckLongBeep();
-  } while (ret == 0);
-  return ret;
-  // TODO: Then wait for the set button to be pushed
-}
 
-
-int WaitForBeeping() {
-  BeepTracker bt;
-  int ret;
-  do {
-    usleep(1000);
-    ret = bt.CheckContinous();
-  } while (ret == 0);
-  if (ret > 0) {
-    HitButton(SET_BUTTON);
-  }
-  return ret;
-}
-
-void Test_ListenForBeeps() {
-  BeepTracker bt;
-  int ret;
-  while(1) {
-    usleep(1000);
-    ret = bt.CheckBeep();
-    if (ret > 0) {
-      printf("beep: %d\n", ret);
-    }
-  }
-}
+// void Test_ListenForBeeps() {
+  // BeepTracker bt;
+  // int ret;
+  // while(1) {
+    // usleep(1000);
+    // ret = bt.CheckBeep();
+    // if (ret > 0) {
+      // printf("beep: %d\n", ret);
+    // }
+  // }
+// }
 
 
