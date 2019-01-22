@@ -201,13 +201,14 @@ class WeightFilter {
       excluded_[index] = true;
       unexcluded_count = 0;
       for (unsigned int i = 0; i < raw_data_.size(); ++i) {
-        if(!excluded_[i])
+        if(!excluded_[i] && verbose_)
       printf("%02d raw: %i  sigma %8.4f    ave: %8.4f   ave sigma:  %8.4f  dev: %8.4f %s\n", i,
              raw_data_[i], sigma_[i], average_, average_sigma_, sigma_[i] / average_sigma_,
              excluded_[i] ? "    (Excluded)" : "");
       if (!excluded_[i]) unexcluded_count++;
       }
-      printf("  Excluding %d\n", index);
+      if (verbose_)
+         printf("  Excluding %d\n", index);
       CalculateStats();
 
     } while (average_sigma_ > 100000 || dev > 100000);

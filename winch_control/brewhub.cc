@@ -292,7 +292,11 @@ void RunTestCommand(int argc, char **argv) {
   }
 
   if (argv[1][0] == 'V') {
-    Test_Valves();
+    char valve_arg = 'F';
+    if (strlen(argv[1]) > 1) {
+      valve_arg = argv[1][1];
+    }
+    Test_Valves(valve_arg);
   }
 
 

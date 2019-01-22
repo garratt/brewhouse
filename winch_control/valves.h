@@ -34,15 +34,31 @@ int DeactivateChillerPump() {
 }
 
 
-void Test_Valves() {
-   SetFlow(NO_PATH);
-    HitButton(PUMP_BUTTON);
-    SetFlow(KETTLE);
-    sleep(10);
-    SetFlow(CHILLER);
-    sleep(18);
-    SetFlow(CARBOY);
-    sleep(10);
-    SetFlow(NO_PATH);
-    HitButton(PUMP_BUTTON);
+void Test_Valves(char valve_arg) {
+  switch (valve_arg) {
+    case 'F':
+      SetFlow(NO_PATH);
+      HitButton(PUMP_BUTTON);
+      SetFlow(KETTLE);
+      sleep(10);
+      SetFlow(CHILLER);
+      sleep(18);
+      SetFlow(CARBOY);
+      sleep(10);
+      SetFlow(NO_PATH);
+      HitButton(PUMP_BUTTON);
+      break;
+    case 'K':
+      SetFlow(KETTLE);
+      break;
+    case 'C':
+      SetFlow(CHILLER);
+      break;
+    case 'B':
+      SetFlow(CARBOY);
+      break;
+    case 'N':
+      SetFlow(NO_PATH);
+      break;
+  }
 }
