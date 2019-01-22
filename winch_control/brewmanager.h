@@ -123,15 +123,17 @@ class BrewManager {
     if (WaitForMashTemp()) {
       return -1;
     }
+    SetFlow(KETTLE);
     // Wait for mash to complete
     if (WaitForBeeping(5 * 60)) {
       return -1;
     }
+    HitButton(SET_BUTTON);
 
     printf("Mash is Done! Lift and let drain\n");
     if(RaiseToDrain() < 0) return -1;
 
-    if (WaitMinutes(30)) return -1;
+    if (WaitMinutes(5)) return -1;
     // Draining done.
 
     printf("Skip to Boil\n");
@@ -141,6 +143,7 @@ class BrewManager {
 
     // Wait for beeping, which indicates boil reached
     if (WaitForBeeping(90)) return -1;
+    HitButton(SET_BUTTON);
     printf("Boil Reached\n");
 
     if (LowerHops() < 0) return -1;
@@ -157,6 +160,7 @@ class BrewManager {
 
     // Wait for boil to complete:
     if (WaitForBeeping(60)) return -1;
+    HitButton(SET_BUTTON);
     printf("Boil Done\n");
 
     RaiseHops();
@@ -176,8 +180,9 @@ class BrewManager {
     // Decant:
     SetFlow(CARBOY);
     HitButton(PUMP_BUTTON);
-    if (WaitForEmpty(3000, 30)) return -1;
+    if (WaitForEmpty(9000, 30)) return -1;
     HitButton(PUMP_BUTTON);
+    return 0;
   }
 
 

@@ -5,7 +5,7 @@
 #include "brewmanager.h"
 int main(void)
 {
-  BrewManager brewmanager("Test Weight Logger");
-  brewmanager.WaitForInput(60 * 60 * 3);
+  BrewManager brewmanager("Test Brew 1");
+  brewmanager.RunBrewSession();
   return 0;
 }
