@@ -2,12 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "logger.h"
+#include "brewmanager.h"
 int main(void)
 {
-
-  BrewLogger brewlogger("Test Stout Logger");
-  brewlogger.LogWeight(34.5);
-  brewlogger.LogWeight(346.5);
+  BrewManager brewmanager("Test Weight Logger");
+  brewmanager.WaitForInput(60 * 60 * 3);
   return 0;
 }
