@@ -107,18 +107,18 @@ int GoRight(uint32_t ms) { return RunBothWinches(ms, 0); }
 
 int RaiseToDrain() {
   // Assumes we are in the mash state
-  if (RightGoUp(2500)) { // go up until we hit the limit
+  if (RightGoUp(1900)) { // go up until we are close to the top of the kettle
     return -1;
   }
-  if (RightGoDown(200)) {
-    return -1;
-  }
+  // if (RightGoDown(200)) {
+    // return -1;
+  // }
   return 0;
 }
 
 int MoveToSink() {
   // Raise to limit:
-  RightGoUp(300);
+  RightGoUp(900);
   // Lower a little:
   RightGoDown(100);
   // Now scoot over using both winches:

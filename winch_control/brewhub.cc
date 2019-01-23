@@ -110,6 +110,11 @@ void RunTestCommand(int argc, char **argv) {
     return;
   }
 
+  if (argv[1][0] == 'p') {
+    ActivateChillerPump();
+    return;
+  }
+
   // if (argv[1][0] == 'd') {
     // Test_GrainfatherInterface();
     // return;

@@ -5,7 +5,13 @@
 #include "brewmanager.h"
 int main(void)
 {
-  BrewManager brewmanager("Test Brew 1");
+  InitIO();
+  BrewManager brewmanager("Test Full Run");
+  // SetFlow(CARBOY);
+  // HitButton(PUMP_BUTTON);
+  // brewmanager.WaitForEmpty(9000, 20);
+  // HitButton(PUMP_BUTTON);
+
   brewmanager.RunBrewSession();
   return 0;
 }

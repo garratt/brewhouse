@@ -133,11 +133,11 @@ class BrewManager {
       return -1;
     }
     HitButton(SET_BUTTON);
-
+    sleep(30);
     printf("Mash is Done! Lift and let drain\n");
     if(RaiseToDrain() < 0) return -1;
 
-    if (WaitMinutes(5)) return -1;
+    if (WaitMinutes(2)) return -1;
     // Draining done.
 
     printf("Skip to Boil\n");
@@ -153,14 +153,15 @@ class BrewManager {
     if (LowerHops() < 0) return -1;
 
     HitButton(PUMP_BUTTON);
-    if (WaitMinutes(45)) return -1;
+    HitButton(SET_BUTTON);
+    // if (WaitMinutes(45)) return -1;
 
     // Run boiling wort through chiller to sterilize it
-    SetFlow(CHILLER);
+    // SetFlow(CHILLER);
 
     // TODO: wait for 10 minutes
-    if (WaitMinutes(10)) return -1;
-    SetFlow(KETTLE);
+    // if (WaitMinutes(10)) return -1;
+    // SetFlow(KETTLE);
 
     // Wait for boil to complete:
     if (WaitForBeeping(60)) return -1;
@@ -169,23 +170,25 @@ class BrewManager {
 
     RaiseHops();
 
-    SetFlow(CHILLER);
+    // SetFlow(CHILLER);
+    SetFlow(CARBOY);
     ActivateChillerPump();
-    HitButton(PUMP_BUTTON);
+    // HitButton(PUMP_BUTTON);
 
-    printf("Cooling Wort\n");
+    // printf("Cooling Wort\n");
     // Wait for 20 minutes
-    if (WaitMinutes(20)) return -1;
+    // if (WaitMinutes(20)) return -1;
 
+    // HitButton(PUMP_BUTTON);
+    // DeactivateChillerPump();
+
+    printf("Cooling Wort into Carboy\n");
+    // Decant:
+    // HitButton(PUMP_BUTTON);
+    if (WaitForEmpty(10000, 30)) return -1;
     HitButton(PUMP_BUTTON);
     DeactivateChillerPump();
-
-    printf("Decanting Wort into Carboy\n");
-    // Decant:
-    SetFlow(CARBOY);
-    HitButton(PUMP_BUTTON);
-    if (WaitForEmpty(9000, 30)) return -1;
-    HitButton(PUMP_BUTTON);
+    WaitMinutes(2);
     return 0;
   }
 
