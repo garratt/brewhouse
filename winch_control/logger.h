@@ -12,10 +12,13 @@
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
 
+#include <thread>
+#include <deque>
+#include <mutex>
+
+
 namespace oauth {
 
-static char errorBuffer[CURL_ERROR_SIZE];
-static std::string buffer;
  
 //  libcurl write callback function
 static int writer(char *data, size_t size, size_t nmemb, std::string *writerData) {
@@ -44,6 +47,7 @@ std::string CurlPost(const char *url, const char *post_data, curl_slist *headers
   }
   curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data);
 
+  static char errorBuffer[CURL_ERROR_SIZE];
   res = curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errorBuffer);
   if(res != CURLE_OK) {
     fprintf(stderr, "Failed to set error buffer [%d]\n", res);
@@ -54,7 +58,7 @@ std::string CurlPost(const char *url, const char *post_data, curl_slist *headers
     fprintf(stderr, "Failed to set writer [%s]\n", errorBuffer);
     return "";
   }
-  buffer.clear();
+  std::string buffer;
   res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
   if(res != CURLE_OK) {
     fprintf(stderr, "Failed to set write data [%s]\n", errorBuffer);
@@ -319,6 +323,46 @@ class BrewLogger {
   static constexpr const char *kWeightRange = "weights!A2:E3";
   std::string spreadsheet_id_;
   oauth::OathAccess sheets_access_, drive_access_;
+  // For threaded operation:
+  struct LogMessage {
+   std::string cell_range, sheet_id, values;
+  };
+  std::deque<LogMessage> message_queue_;
+  bool quit_threads_ = false;
+  std::mutex message_lock_;
+  bool PopMessage(LogMessage *current_message) {
+     std::lock_guard<std::mutex> lock(message_lock_);
+     if (message_queue_.size() == 0) {
+       return false;
+     }
+     *current_message = message_queue_.front();
+     message_queue_.pop_front();
+     return true;
+  }
+
+
+  void SendMessages() {
+    LogMessage current_message;
+    while(!quit_threads_) {
+     if (PopMessage(&current_message)) {
+        oauth::AppendToSheets(current_message.cell_range.c_str(),
+                              current_message.sheet_id.c_str(),
+                              current_message.values.c_str(),
+                              sheets_access_.GetAccessToken().c_str());
+     } else {
+       sleep(1);
+     }
+    }
+  }
+
+  void EnqueueMessage(std::string cell_range, std::string sheet_id, std::string values) {
+     std::lock_guard<std::mutex> lock(message_lock_);
+     LogMessage message = {cell_range, sheet_id, values};
+     message_queue_.push_back(message);
+  }
+
+
+  std::thread message_thread_;
   public:
   BrewLogger(const char *session_name) : sheets_access_(kSheetsScope, "sheets"), drive_access_(kDriveScope, "drive") {
     // TODO: this is just a test sheet
@@ -326,6 +370,14 @@ class BrewLogger {
     // Copy the template into a new sheet
     spreadsheet_id_ = oauth::CopySheet(session_name, template_sheet,
                                       drive_access_.GetAccessToken().c_str());
+
+    // because std::thread is movable, just assign another one there:
+    message_thread_ = std::thread(&BrewLogger::SendMessages, this);
+  }
+
+  ~BrewLogger() {
+    quit_threads_ = true;
+    message_thread_.join();
   }
 
   // Sheet Layout:
@@ -347,8 +399,9 @@ class BrewLogger {
     const char *values_format = "{\"values\":[[\"%s\", \"%d.%09ld\", \"%s\", \"%s\"]]}";
     sprintf(values, values_format, ctime(&tm.tv_sec), tm.tv_sec, tm.tv_nsec,
         levels_[severity], message.c_str());
-    oauth::AppendToSheets(kLogRange, spreadsheet_id_.c_str(), values,
-                          sheets_access_.GetAccessToken().c_str());
+    EnqueueMessage(kLogRange, spreadsheet_id_.c_str(), values);
+    // oauth::AppendToSheets(kLogRange, spreadsheet_id_.c_str(), values,
+                          // sheets_access_.GetAccessToken().c_str());
     // TODO: also log to file
   }
 
@@ -360,8 +413,9 @@ class BrewLogger {
     // time (readable), time(number), severity, message
     const char *values_format = "{\"values\":[[\"%s\", \"%d.%09ld\", \"%f\"]]}";
     sprintf(values, values_format, ctime(&tm.tv_sec), tm.tv_sec, tm.tv_nsec, grams);
-    oauth::AppendToSheets(kWeightRange, spreadsheet_id_.c_str(),
-                          values, sheets_access_.GetAccessToken().c_str());
+    EnqueueMessage(kWeightRange, spreadsheet_id_.c_str(), values);
+    // oauth::AppendToSheets(kWeightRange, spreadsheet_id_.c_str(),
+                          // values, sheets_access_.GetAccessToken().c_str());
   }
 
 };
