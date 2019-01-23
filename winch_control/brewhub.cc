@@ -140,10 +140,11 @@ void RunTestCommand(int argc, char **argv) {
   }
 
 
-  // if (argv[1][0] == 'L') {
-    // Test_ListenForBeeps();
-    // return;
-  // }
+  if (argv[1][0] == 'L') {
+    BeepTracker bt;
+    bt.Test_ListenForBeeps();
+    return;
+  }
 
   if (argv[1][0] == '1') {
     RaiseToDrain();

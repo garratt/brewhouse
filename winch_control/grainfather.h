@@ -118,20 +118,31 @@ class BeepTracker {
       // }
       // return 0;
     // }
+
+  
+void Test_ListenForBeeps() {
+  BeepStatus ret;
+  while(1) {
+    usleep(1000);
+    ret = CheckBeep();
+    if (ret.state == BeepStatus::SHORT) {
+      printf("short beep: length: %d off: %lu  prev: %lu\n",
+          ret.length, start_ - prev_stop_, prev_stop_ - prev_start_);
+    }
+    if (ret.state == BeepStatus::LONG) {
+      printf("long beep: length: %d off: %lu  prev: %lu\n",
+          ret.length, start_ - prev_stop_, prev_stop_ - prev_start_);
+    }
+    if (ret.state == BeepStatus::CONTINUOUS) {
+      printf("CONTINUOUS beep: length: %d off: %lu  prev: %lu\n",
+          ret.length, start_ - prev_stop_, prev_stop_ - prev_start_);
+    }
+  }
+}
+
 };
 
 
 
-// void Test_ListenForBeeps() {
-  // BeepTracker bt;
-  // int ret;
-  // while(1) {
-    // usleep(1000);
-    // ret = bt.CheckBeep();
-    // if (ret > 0) {
-      // printf("beep: %d\n", ret);
-    // }
-  // }
-// }
 
 
