@@ -37,7 +37,8 @@ class BrewManager {
 
   // waits for beeps and scale
   // returns 0 if the function stops for the correct reason (trigger event)
-  int WaitForInput(uint32_t timeout_sec) {
+  int WaitForInput(uint32_t timeout_sec, InterruptTrigger new_trigger) {
+    interrupt_trigger_ = new_trigger;
     time_t begin = time(NULL);
     do {
       usleep(1000);
@@ -80,7 +81,8 @@ class BrewManager {
          return true;
       }
     }
-    if ((beep_status.state & BeepStatus::LONG) && interrupt_trigger_ == InterruptTrigger::LONG_BEEP) {
+    if ((beep_status.state & BeepStatus::LONG) && 
+        interrupt_trigger_ == InterruptTrigger::LONG_BEEP) {
          brewlogger_.Log(1, "Transition triggerd by long beep");
          return true;
     }
@@ -93,28 +95,25 @@ class BrewManager {
   }
 
   int WaitForMashTemp() {
-    interrupt_trigger_ = InterruptTrigger::LONG_BEEP;
-    int ret = WaitForInput(60 * 60 * 3);  // Wait for up to 3 hours
+    return WaitForInput(60 * 60 * 3, InterruptTrigger::LONG_BEEP);  // Wait for up to 3 hours
     // TODO: Log mash started on overview page
     // This is a good measure of all the water we are mashing with
     // TODO: calculate water volume
-    return ret;
+    // return ret;
   }
 
   int WaitForBeeping(uint32_t minutes) {
-    interrupt_trigger_ = InterruptTrigger::CONTINUOUS_BEEP;
-    return WaitForInput(60 * minutes);  // 5 hours, including heating time
+    // 5 hours, including heating time
+    return WaitForInput(60 * minutes, InterruptTrigger::CONTINUOUS_BEEP);
   }
 
   int WaitMinutes(uint32_t minutes) {
-    interrupt_trigger_ = InterruptTrigger::TIMER;
-    return WaitForInput(60 * minutes);
+    return WaitForInput(60 * minutes, InterruptTrigger::TIMER);
   }
 
   int WaitForEmpty(double weight, uint32_t minutes) {
-    interrupt_trigger_ = InterruptTrigger::WEIGHT;
     weight_trigger_level_ = weight;
-    return WaitForInput(60 * minutes);
+    return WaitForInput(60 * minutes, InterruptTrigger::WEIGHT);
   }
 
 
