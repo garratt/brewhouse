@@ -83,6 +83,7 @@ class BeepTracker {
         bs.state = BeepStatus::SHORT;
         if (IsContinous()) {
           bs.state = BeepStatus::CONTINUOUS;
+          return bs;
         }
         if (IsClose(stop_ - start_, 1500)) {
           bs.state = BeepStatus::LONG;

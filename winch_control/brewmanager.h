@@ -67,13 +67,18 @@ class BrewManager {
     // Log any beep:
     char status_msg[300];
     if (beep_status.state & (BeepStatus::SHORT | BeepStatus::LONG | BeepStatus::CONTINUOUS)) {
-      sprintf(status_msg, "Beep for %u ms.", beep_status.length);
+      if (beep_status.state & BeepStatus::SHORT)
+        sprintf(status_msg, "Short Beep for %u ms.", beep_status.length);
+      if (beep_status.state & BeepStatus::LONG)
+        sprintf(status_msg, "LONG Beep for %u ms.", beep_status.length);
+      if (beep_status.state & BeepStatus::CONTINUOUS)
+        sprintf(status_msg, "CONTINUOUS Beep for %u ms.", beep_status.length);
       brewlogger_.Log(1, status_msg);
     }
     // Log any weight:
     if (scale_status.state & ScaleStatus::READY) {
       brewlogger_.LogWeight(scale_status.weight);
-      if (interrupt_trigger_ == InterruptTrigger::WEIGHT && 
+      if (interrupt_trigger_ == InterruptTrigger::WEIGHT &&
           scale_status.weight < weight_trigger_level_) {
          sprintf(status_msg, "Weight of %f < %f, transition triggered.",
                  scale_status.weight, weight_trigger_level_);
@@ -81,7 +86,7 @@ class BrewManager {
          return true;
       }
     }
-    if ((beep_status.state & BeepStatus::LONG) && 
+    if ((beep_status.state & BeepStatus::LONG) &&
         interrupt_trigger_ == InterruptTrigger::LONG_BEEP) {
          brewlogger_.Log(1, "Transition triggerd by long beep");
          return true;
