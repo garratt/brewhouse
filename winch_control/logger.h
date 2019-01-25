@@ -405,10 +405,15 @@ class BrewLogger {
     // TODO: also log to file
   }
 
-  void LogWeight(double grams) {
+  void LogWeight(double grams, time_t log_time = 0) {
     // time, time, weight
     timespec tm;
-    clock_gettime(CLOCK_REALTIME, &tm);
+    if (log_time == 0) {
+      clock_gettime(CLOCK_REALTIME, &tm);
+    } else {
+      tm.tv_sec = log_time;
+      tm.tv_nsec = 0;
+    }
     char values[2000];
     // time (readable), time(number), severity, message
     const char *values_format = "{\"values\":[[\"%s\", \"%d.%09ld\", \"%f\"]]}";

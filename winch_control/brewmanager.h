@@ -20,12 +20,74 @@
 #include "logger.h"
 
 
+struct WeightLimiter {
+  time_t last_log_ = 0;
+  time_t first_log_ = 0;
+  int count_ = 0;
+  double sum_ = 0;
+  // if the reading is this far from the average, return the average and
+  // start a new set.
+  static constexpr int kMaxDeviationGrams = 30;
+  // If there is a jump in weight logging, return the average and start a new set
+  static constexpr int kMaxTimeJumpSeconds = 60;
+  // This is the rate at which we log, even if the weight is constant
+  static constexpr int kLoggingPeriodSeconds = 300; // 5 minutes
+  
+  bool PublishWeight(double weight_in, double *weight_out, time_t *log_time) {
+    // If it is the first weight, publish it and save it.
+    time_t now = time(NULL);
+    if (count_ == 0) {
+      last_log_ = now;
+      count_ = 1;
+      sum_ = weight_in;
+    }
+    double average = sum_ / count_;
+    double dev = average > weight_in ? average - weight_in : weight_in - average;
+    if (dev > kMaxDeviationGrams || difftime(now, last_log_) > kMaxTimeJumpSeconds
+        || difftime(now, first_log_) > kLoggingPeriodSeconds) {
+      // We always report the previous readings, and leave our current reading
+      *weight_out = average;
+      *log_time = last_log_;
+      last_log_ = now;
+      first_log_ = now;
+      count_ = 1;
+      sum_ = weight_in;
+      return true;
+    }
+    // Otherwise, just record the reading
+    count_++;
+    sum_ += weight_in;
+    return false;
+  }
+};
+
+
 class BrewManager {
  BeepTracker beep_tracker_;
  BrewLogger brewlogger_;
  WeightFilter weight_filter_;
+ WeightLimiter weight_limiter_;
  enum InterruptTrigger { NONE, LONG_BEEP, CONTINUOUS_BEEP, TIMER, WEIGHT};
  InterruptTrigger interrupt_trigger_;
+ const char * TriggerString() {
+   switch (interrupt_trigger_) {
+     case NONE:
+       return "No Trigger. WTF?";
+     case LONG_BEEP:
+       return "a long beep";
+     case CONTINUOUS_BEEP:
+       return "continous beeping";
+     case TIMER:
+       return "the time to expire";
+     case WEIGHT:
+       return "The weight to decrease below a level";
+   }
+   return "A case that TriggerString needs to be updated with";
+ }
+ 
+
+
+
  double weight_trigger_level_;
  public:
   BrewManager(const char *brew_session) : brewlogger_(brew_session),
@@ -38,6 +100,9 @@ class BrewManager {
   // waits for beeps and scale
   // returns 0 if the function stops for the correct reason (trigger event)
   int WaitForInput(uint32_t timeout_sec, InterruptTrigger new_trigger) {
+    char status_msg[300];
+    sprintf(status_msg, "Waiting %u minutes for %s.", timeout_sec / 60, TriggerString());
+    brewlogger_.Log(1, status_msg);
     interrupt_trigger_ = new_trigger;
     time_t begin = time(NULL);
     do {
@@ -77,7 +142,11 @@ class BrewManager {
     }
     // Log any weight:
     if (scale_status.state & ScaleStatus::READY) {
-      brewlogger_.LogWeight(scale_status.weight);
+      double logging_weight;
+      time_t log_time;
+      if(weight_limiter_.PublishWeight(scale_status.weight, &logging_weight, &log_time)) {
+        brewlogger_.LogWeight(scale_status.weight, log_time);
+      }
       if (interrupt_trigger_ == InterruptTrigger::WEIGHT &&
           scale_status.weight < weight_trigger_level_) {
          sprintf(status_msg, "Weight of %f < %f, transition triggered.",
