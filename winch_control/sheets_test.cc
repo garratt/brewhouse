@@ -3,10 +3,14 @@
 // found in the LICENSE file.
 
 #include "brewmanager.h"
-int main(void)
+int main(int argc, char **argv)
 {
+  if (argc < 2) {
+    printf("Must specify brew session name!\n");
+    return -1;
+  }
   InitIO();
-  BrewManager brewmanager("Test Full Run");
+  BrewManager brewmanager(argv[1]);
   // SetFlow(CARBOY);
   // HitButton(PUMP_BUTTON);
   // brewmanager.WaitForEmpty(9000, 20);

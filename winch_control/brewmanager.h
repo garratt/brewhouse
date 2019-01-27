@@ -18,6 +18,7 @@
 #include "valves.h"
 #include "winch.h"
 #include "logger.h"
+#include "brewtweeter.h"
 
 
 struct WeightLimiter {
@@ -59,11 +60,14 @@ struct WeightLimiter {
     sum_ += weight_in;
     return false;
   }
+
+  double GetWeight() { return count_ ? sum_ / count_ : 0; }
 };
 
 
 class BrewManager {
  BeepTracker beep_tracker_;
+ BrewTweeter brew_tweeter_;
  BrewLogger brewlogger_;
  WeightFilter weight_filter_;
  WeightLimiter weight_limiter_;
@@ -92,6 +96,10 @@ class BrewManager {
  public:
   BrewManager(const char *brew_session) : brewlogger_(brew_session),
                                           weight_filter_("scale_calibration.txt") {
+
+    std::string message = "Starting a new brew! Brewing: ";
+
+    brew_tweeter_.Tweet(message + brew_session);
     if(InitIO() < 0) {
       printf("Failed during initialization. Make sure you can write to all gpios!\n");
     }
@@ -196,19 +204,27 @@ class BrewManager {
     if (WaitForMashTemp()) {
       return -1;
     }
+    double current_weight = weight_limiter_.GetWeight();
+
+    brew_tweeter_.Tweet("Mash temperature reached, lets get mashing!");
+
     SetFlow(KETTLE);
     // Wait for mash to complete
     if (WaitForBeeping(5 * 60)) {
       return -1;
     }
     HitButton(SET_BUTTON);
-    sleep(30);
+    brew_tweeter_.Tweet("Mash is done. I'm going to lift in 1 minute!");
+    sleep(60);
     printf("Mash is Done! Lift and let drain\n");
     if(RaiseToDrain() < 0) return -1;
 
-    if (WaitMinutes(2)) return -1;
+    brew_tweeter_.Tweet("Okay, draining for 30 minutes.");
+    if (WaitMinutes(30)) return -1;
     // Draining done.
 
+    brew_tweeter_.Tweet("Done Draining.  I will move the mash in 3 minutes!");
+    if (WaitMinutes(3)) return -1;
     printf("Skip to Boil\n");
     HitButton(SET_BUTTON);
 
@@ -216,6 +232,7 @@ class BrewManager {
 
     // Wait for beeping, which indicates boil reached
     if (WaitForBeeping(90)) return -1;
+    brew_tweeter_.Tweet("Boil temperature reached, the boil is on");
     HitButton(SET_BUTTON);
     printf("Boil Reached\n");
 
@@ -236,6 +253,7 @@ class BrewManager {
     if (WaitForBeeping(60)) return -1;
     HitButton(SET_BUTTON);
     printf("Boil Done\n");
+    brew_tweeter_.Tweet("Boil is complete!");
 
     RaiseHops();
 
@@ -252,12 +270,14 @@ class BrewManager {
     // DeactivateChillerPump();
 
     printf("Cooling Wort into Carboy\n");
+    brew_tweeter_.Tweet("Boil is complete!");
     // Decant:
     // HitButton(PUMP_BUTTON);
     if (WaitForEmpty(10000, 30)) return -1;
     HitButton(PUMP_BUTTON);
     DeactivateChillerPump();
     WaitMinutes(2);
+    brew_tweeter_.Tweet("I'm done here. Come clean me out!");
     return 0;
   }
 
