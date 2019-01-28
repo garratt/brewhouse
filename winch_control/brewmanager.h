@@ -83,6 +83,8 @@ class BrewManager {
        return "No Trigger. WTF?";
      case LONG_BEEP:
        return "a long beep";
+     case SHORT_BEEP:
+       return "a short beep";
      case CONTINUOUS_BEEP:
        return "continous beeping";
      case TIMER:
@@ -220,7 +222,7 @@ class BrewManager {
     double current_weight = weight_limiter_.GetWeight();
     double weight_with_water = current_weight;
     char twitter_msg[240];
-    sprintf(twitter_msg, "Mash temperature reached, volume is: %f lets get mashing!", ToLiters(current_weight, 1.00, true));
+    sprintf(twitter_msg, "Mash temperature reached, volume is: %2.3f lets get mashing!", ToLiters(current_weight, 1.00, true));
     brew_tweeter_.Tweet(twitter_msg);
 
     SetFlow(KETTLE);
@@ -228,13 +230,13 @@ class BrewManager {
     if(WaitForInput(25 * 60, InterruptTrigger::SHORT_BEEP)) {
       printf ("Never caught the short beep. Did mash start?\n");
       brew_tweeter_.Tweet("Never caught the short beep. Did mash start?\n");
-      return -1;
+      // return -1;
     }
     // Now the mash has started.  Get the weight for the grain bill
     // This call will return -1, because it is just a delay to read weight
     WaitForInput(300, InterruptTrigger::SHORT_BEEP);
     double with_grain_weight = weight_limiter_.GetWeight();
-    sprintf(twitter_msg, "The Grain bill is estimated to be %f kg.", (with_grain_weight - weight_with_water) / 1000.0);
+    sprintf(twitter_msg, "The Grain bill is estimated to be %2.3f kg.", (with_grain_weight - weight_with_water) / 1000.0);
     brew_tweeter_.Tweet(twitter_msg);
 
     // Wait for mash to complete
@@ -243,18 +245,18 @@ class BrewManager {
     }
     HitButton(SET_BUTTON);
     double after_mash_weight = weight_limiter_.GetWeight();
-    sprintf(twitter_msg, "Mash is done. I'm going to lift in 1 minute.  Volume loss: %f L", (with_grain_weight - after_mash_weight) / 1000.0);
+    sprintf(twitter_msg, "Mash is done. I'm going to lift in 1 minute.  Volume loss: %2.3f L", (with_grain_weight - after_mash_weight) / 1000.0);
     brew_tweeter_.Tweet(twitter_msg);
     sleep(60);
     printf("Mash is Done! Lift and let drain\n");
     if(RaiseToDrain() < 0) return -1;
 
-    brew_tweeter_.Tweet("Okay, draining for 30 minutes.");
-    if (WaitMinutes(30)) return -1;
+    brew_tweeter_.Tweet("Okay, draining for 45 minutes.");
+    if (WaitMinutes(45)) return -1;
     // Draining done.
 
     double after_lift_weight = weight_limiter_.GetWeight();
-    sprintf(twitter_msg, "Done Draining.  I will move the mash in 3 minutes! Volume is now: %f", ToLiters(after_lift_weight, target_gravity_, false));
+    sprintf(twitter_msg, "Done Draining.  I will move the mash in 3 minutes! Volume is now: %2.3f", ToLiters(after_lift_weight, target_gravity_, false));
     brew_tweeter_.Tweet(twitter_msg);
     if (WaitMinutes(3)) return -1;
     printf("Skip to Boil\n");
@@ -265,7 +267,7 @@ class BrewManager {
     // Wait for beeping, which indicates boil reached
     if (WaitForBeeping(90)) return -1;
     double before_boil_weight = weight_limiter_.GetWeight();
-    sprintf(twitter_msg, "Boil temperature reached, the boil is on. Pre Boil Volume is: %f", ToLiters(before_boil_weight, target_gravity_, false));
+    sprintf(twitter_msg, "Boil temperature reached, the boil is on. Pre Boil Volume is: %2.3f", ToLiters(before_boil_weight, target_gravity_, false));
     brew_tweeter_.Tweet(twitter_msg);
     HitButton(SET_BUTTON);
     printf("Boil Reached\n");
@@ -280,21 +282,23 @@ class BrewManager {
     HitButton(SET_BUTTON);
     printf("Boil Done\n");
 
+    WaitMinutes(3);
     RaiseHops();
     // Wait to get some more weight readings
     WaitMinutes(3);
     double after_boil_weight = weight_limiter_.GetWeight();
-    sprintf(twitter_msg, "Boil is complete. Post Boil Volume is: %f, loss: %f", ToLiters(after_boil_weight, target_gravity_, false), (after_boil_weight - before_boil_weight) / 1000.0);
+    sprintf(twitter_msg, "Boil is complete. Post Boil Volume is: %2.3f, loss: %2.3f", ToLiters(after_boil_weight, target_gravity_, false), (after_boil_weight - before_boil_weight) / 1000.0);
     brew_tweeter_.Tweet(twitter_msg);
-    // SetFlow(CHILLER);
-    SetFlow(CARBOY);
+    SetFlow(CHILLER);
+    // SetFlow(CARBOY);
     ActivateChillerPump();
 
 
     printf("Cooling Wort into Carboy\n");
     brew_tweeter_.Tweet("Boil is complete!");
     // Decant:
-    // HitButton(PUMP_BUTTON);
+    HitButton(PUMP_BUTTON);
+
     if (WaitForEmpty(10000, 30)) return -1;
     HitButton(PUMP_BUTTON);
     DeactivateChillerPump();
