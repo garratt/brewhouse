@@ -152,22 +152,22 @@ void RunTestCommand(int argc, char **argv) {
   }
 
   if (argv[1][0] == '1') {
-    RaiseToDrain();
+    winch::RaiseToDrain();
     return;
   }
 
   if (argv[1][0] == '2') {
-    MoveToSink();
+    winch::MoveToSink();
     return;
   }
 
   if (argv[1][0] == '3') {
-    LowerHops();
+    winch::LowerHops();
     return;
   }
 
   if (argv[1][0] == '4') {
-    RaiseHops();
+    winch::RaiseHops();
     return;
   }
 
@@ -188,7 +188,7 @@ void RunTestCommand(int argc, char **argv) {
   }
 
   if (argv[1][0] == 'l' || argv[1][0] == 'r' || argv[1][0] == 'b') {
-    ManualWinchControl(argv[1][0], argv[1][1], ms);
+    winch::ManualWinchControl(argv[1][0], argv[1][1], ms);
   }
 
 }

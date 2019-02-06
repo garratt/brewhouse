@@ -249,7 +249,7 @@ class BrewManager {
     brew_tweeter_.Tweet(twitter_msg);
     sleep(60);
     printf("Mash is Done! Lift and let drain\n");
-    if(RaiseToDrain() < 0) return -1;
+    if(winch::RaiseToDrain() < 0) return -1;
 
     brew_tweeter_.Tweet("Okay, draining for 45 minutes.");
     if (WaitMinutes(45)) return -1;
@@ -262,7 +262,7 @@ class BrewManager {
     printf("Skip to Boil\n");
     HitButton(SET_BUTTON);
 
-    if(MoveToSink() < 0) return -1;
+    if(winch::MoveToSink() < 0) return -1;
 
     // Wait for beeping, which indicates boil reached
     if (WaitForBeeping(90)) return -1;
@@ -272,7 +272,7 @@ class BrewManager {
     HitButton(SET_BUTTON);
     printf("Boil Reached\n");
 
-    if (LowerHops() < 0) return -1;
+    if (winch::LowerHops() < 0) return -1;
 
     HitButton(PUMP_BUTTON);
     HitButton(SET_BUTTON);
@@ -283,7 +283,7 @@ class BrewManager {
     printf("Boil Done\n");
 
     WaitMinutes(3);
-    RaiseHops();
+    winch::RaiseHops();
     // Wait to get some more weight readings
     WaitMinutes(3);
     double after_boil_weight = weight_limiter_.GetWeight();
