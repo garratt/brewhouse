@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "brewmanager.h"
+#include "grainfather2.h"
 int main(int argc, char **argv)
 {
   if (argc < 2) {
