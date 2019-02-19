@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <iostream>
 #include <stdio.h>
 #include <sys/types.h>  // for open
 #include <sys/stat.h>   // for open
@@ -45,8 +46,9 @@ std::string CurlPost(const char *url, const char *post_data, curl_slist *headers
   if (headers) {
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   }
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data);
-
+  if (post_data) {
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data);
+  }
   static char errorBuffer[CURL_ERROR_SIZE];
   res = curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errorBuffer);
   if(res != CURLE_OK) {
@@ -93,6 +95,63 @@ void AppendToSheets(const char *range, const char *sheet, const char *values, co
   }
   // TODO: check for other errors?
 }
+
+std::string ReadFromSheets(const char *range, const char *sheet, const char *token) {
+  char url[2000], token_header[500];
+  const char *url_format = "https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s";
+  // ?majorDimension=COLUMNS";
+  snprintf(url, 2000, url_format, sheet, range);
+  snprintf(token_header, 500, "Authorization: Bearer %s", token);
+    curl_slist *list = NULL;
+    list = curl_slist_append(list, "Content-Type: application/json");
+    list = curl_slist_append(list, token_header);
+  std::string response = CurlPost(url, nullptr, list);
+  if (response.size() == 0) {
+    printf("Failed to read data from spreadsheet\n");
+    return "";
+  }
+  // TODO: check for other errors?
+  // Return json string
+  return response;
+}
+
+// Read One value
+std::string ReadValueFromSheets(const char *range, const char *sheet, const char *token) {
+  std::string response = ReadFromSheets(range, sheet, token);
+    rapidjson::Document document;
+    document.Parse(response.c_str());
+    if (!document.IsObject()) {
+      printf("Document is not object\n");
+      return "";
+    }
+    if (document.HasMember("values") && document["values"].IsArray()) {
+      return document["values"][0][0].GetString();
+    } else {
+      printf("failed to get values\n");
+    }
+  return "";
+}
+
+
+// Read One value
+std::vector<std::string> ReadArrayFromSheets(const char *range, const char *sheet, const char *token) {
+  std::string response = ReadFromSheets(range, sheet, token);
+  std::vector<std::string> ret;
+  rapidjson::Document document;
+  document.Parse(response.c_str());
+  if (!document.IsObject()) {
+    printf("Document is not object\n");
+    return ret;
+  }
+  if (document.HasMember("values") && document["values"].IsArray()) {
+    for (unsigned i = 0; i < document["values"].Size(); ++i) {
+      ret.push_back(document["values"][i][0].GetString());
+    }
+  }
+  return ret;
+}
+
+
 
 // Returns the id of the new sheet
 std::string CopySheet(const char *title, const char *sheet, const char *token) {
@@ -314,6 +373,17 @@ class OathAccess {
 
 } // namespace oauth
 
+
+struct BrewRecipe {
+  std::string session_name;
+  std::vector<double> mash_temps;
+  std::vector<uint32_t> mash_times;
+  unsigned boil_minutes = 0;
+  double grain_weight_grams;
+  double initial_volume_liters = 0, sparge_liters = 0;
+};
+
+
 // This class logs all data from one brewing session
 class BrewLogger {
   static constexpr const char *kSheetsScope = "https://www.googleapis.com/auth/spreadsheets";
@@ -321,6 +391,25 @@ class BrewLogger {
   // TODO: add sheet
   static constexpr const char *kLogRange = "Log!A2:E3";
   static constexpr const char *kWeightRange = "weights!A2:E3";
+
+  // ---------------------------------------------
+  //   Brew Session Layout
+  // This pulls brew session info from specific places
+  
+  static constexpr const char *kLayoutVersionLoc = "Overview!K1";
+  static constexpr const int kLayoutVersion = 1;
+  static constexpr const char *kSessionNameLoc = "Overview!A2";
+  static constexpr const char *kNumMashStepsLoc = "Overview!G3";
+  static constexpr const char *kMashTimesLoc = "Overview!H5:H9";
+  static constexpr const char *kMashTempsLoc = "Overview!G5:G9";
+  static constexpr const char *kBoilTimeLoc = "Overview!G11";
+  static constexpr const char *kGrainWeightLoc = "Overview!B7";
+  static constexpr const char *kInitialVolumeLoc = "Overview!G14";
+  static constexpr const char *kSpargeVolumeLoc = "Overview!G15";
+  static constexpr const char *kWaterVolumesLoc = "Overview!G14:G15";
+
+
+
   std::string spreadsheet_id_;
   oauth::OathAccess sheets_access_, drive_access_;
   // For threaded operation:
@@ -366,11 +455,13 @@ class BrewLogger {
   public:
   BrewLogger(const char *session_name) : sheets_access_(kSheetsScope, "sheets"), drive_access_(kDriveScope, "drive") {
     // TODO: this is just a test sheet
-    const char *template_sheet = "1kOpPnSpVyEKsGWud0Jmv5YKM5OOeepWDgQaWmGNwTyU";
+    // 1XKuW8LUqdtQWHElJse4nhc9-g7gZZex1t9i_oJFn5FQ 
+    const char *template_sheet = "1XKuW8LUqdtQWHElJse4nhc9-g7gZZex1t9i_oJFn5FQ";
+    //  "1kOpPnSpVyEKsGWud0Jmv5YKM5OOeepWDgQaWmGNwTyU";
     // Copy the template into a new sheet
-    spreadsheet_id_ = oauth::CopySheet(session_name, template_sheet,
-                                      drive_access_.GetAccessToken().c_str());
-
+    // spreadsheet_id_ = oauth::CopySheet(session_name, template_sheet,
+                                      // drive_access_.GetAccessToken().c_str());
+    spreadsheet_id_ = template_sheet;
     // because std::thread is movable, just assign another one there:
     message_thread_ = std::thread(&BrewLogger::SendMessages, this);
   }
@@ -423,4 +514,28 @@ class BrewLogger {
                           // values, sheets_access_.GetAccessToken().c_str());
   }
 
+  std::vector<std::string> GetValues(std::string range) {
+    return oauth::ReadArrayFromSheets(range.c_str(), spreadsheet_id_.c_str(),
+                          sheets_access_.GetAccessToken().c_str());
+  }
+  // just one value
+  std::string GetValue(std::string range) {
+    return oauth::ReadValueFromSheets(range.c_str(), spreadsheet_id_.c_str(),
+                          sheets_access_.GetAccessToken().c_str());
+  }
+  void ReadNewSession() {
+    std::cout << " brew session: " << GetValue(kSessionNameLoc) << std::endl;
+    std::cout << " boil time: " << GetValue(kBoilTimeLoc) << std::endl;
+    std::cout << " Grain Weight: " << GetValue(kGrainWeightLoc) << std::endl;
+    std::vector<std::string> mash_times, mash_temps, volumes;
+    mash_temps = GetValues(kMashTempsLoc);
+    mash_times = GetValues(kMashTimesLoc);
+    volumes = GetValues(kWaterVolumesLoc);
+    std::cout << " Initial Water: " << volumes[0] << std::endl;
+    std::cout << " Sparge Volume: " << volumes[1] << std::endl;
+    std::cout << " mash steps:: " << std::endl;
+    for (unsigned i = 0; i < mash_temps.size(); ++i) {
+      printf("  %2.2f C, %d minutes\n", atof(mash_temps[i].c_str()), atoi(mash_times[i].c_str()));
+    }
+  }
 };
