@@ -24,6 +24,7 @@
 #include "logger.h"
 
 
+#include "brew_session.h"
 
 // All waiting involves:
 //  - communicating with the scale (check every ms)
@@ -152,21 +153,26 @@ void RunTestCommand(int argc, char **argv) {
   }
 
   if (argv[1][0] == '1') {
-    winch::RaiseToDrain();
+    winch::RaiseToDrain_1();
     return;
   }
 
   if (argv[1][0] == '2') {
-    winch::MoveToSink();
+    winch::RaiseToDrain_2();
     return;
   }
 
   if (argv[1][0] == '3') {
-    winch::LowerHops();
+    winch::MoveToSink();
     return;
   }
 
   if (argv[1][0] == '4') {
+    winch::LowerHops();
+    return;
+  }
+
+  if (argv[1][0] == '5') {
     winch::RaiseHops();
     return;
   }

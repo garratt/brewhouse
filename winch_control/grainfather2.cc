@@ -107,6 +107,14 @@ int GrainfatherSerial::AdvanceStage() {
   return CommandAndVerify(kSetButtonString,
       [](BrewState bs) {return !bs.waiting_for_input; });
 }
+int GrainfatherSerial::PauseTimer() {
+  return CommandAndVerify(kPauseTimerString,
+      [](BrewState bs) {return !bs.timer_on || bs.timer_paused; });
+}
+int GrainfatherSerial::ResumeTimer() {
+  return CommandAndVerify(kResumeTimerString,
+      [](BrewState bs) {return !bs.timer_on || !bs.timer_paused; });
+}
 
 int GrainfatherSerial::LoadSession(const char *session_string) {
   int ret = QuitSession(); // make sure there is no current session
@@ -115,7 +123,31 @@ int GrainfatherSerial::LoadSession(const char *session_string) {
       [](BrewState bs) {return bs.brew_session_loaded; });
 }
 
-
+int GrainfatherSerial::TestCommands() {
+  // SetFlow(NO_PATH);
+  if (TurnHeatOn() < 0) { printf("Failed to TurnHeatOn\n"); return -1; }
+  if (TurnHeatOff() < 0) { printf("Failed to TurnHeatOff\n"); return -1; }
+  if (TurnPumpOn() < 0) { printf("Failed to TurnPumpOn\n"); return -1; }
+  if (TurnPumpOff() < 0) { printf("Failed to TurnPumpOff\n"); return -1; }
+  // Now load a session
+   const char *session_string = "R15,2,14.3,14.6,   "
+   "0,1,1,0,0,         "
+   "TEST CONTROLA      "
+   "0,1,0,0,           "
+   "1,                 "
+   "5:16,              "
+   "66:60,             ";
+  if (LoadSession(session_string) < 0) { printf("Failed to LoadSession\n"); return -1; }
+  // Advance to start heating.  It should be at temperature,
+  // so it will go to the user input for starting mash
+  if (AdvanceStage() < 0) { printf("Failed to AdvanceStage\n"); return -1; }
+  // Advance to start mashing. Timer should be on
+  if (AdvanceStage() < 0) { printf("Failed to AdvanceStage\n"); return -1; }
+  if (PauseTimer() < 0) { printf("Failed to PauseTimer\n"); return -1; }
+  if (ResumeTimer() < 0) { printf("Failed to ResumeTimer\n"); return -1; }
+  if (QuitSession() < 0) { printf("Failed to QuitSession\n"); return -1; }
+  return 0;
+}
 
 BrewState GrainfatherSerial::ParseState(char in[kStatusLength]) {
   //T1,1,2,60,ZZZZZZZX19.0,19.1,ZZZZZZY1,1,1,0,0,0,1,0,W0,0,0,1,0,1,ZZZZ
@@ -158,6 +190,10 @@ BrewState GrainfatherSerial::ParseState(char in[kStatusLength]) {
   ret.read_time = GetTimeMsec();
   ret.valid = true;
   return ret;
+}
+
+void GrainfatherSerial::RegisterBrewStateCallback(std::function<void(BrewState)> callback) {
+  brew_state_callback_ = callback;
 }
 
 // Read status

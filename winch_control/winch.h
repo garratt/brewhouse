@@ -38,12 +38,14 @@ inline int GoRight(uint32_t ms) { return RunBothWinches(ms, 0); }
 // the components need to travel, and the velocities the winches run at.
 //  -------------------------------------------------------------------
 
-int RaiseToDrain();
+// Raise a little bit to check that we are not caught
+int RaiseToDrain_1();
+// Raise the rest of the way
+int RaiseToDrain_2();
 int MoveToSink();
 int LowerHops();
 int RaiseHops();
-
-
+int GoToZero();
 
 void ManualWinchControl(char side, char direction, uint32_t duration_ms = 200);
 

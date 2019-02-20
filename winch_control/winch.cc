@@ -6,6 +6,15 @@
 
 namespace winch {
 
+
+// Right slide switch: no effect on winches
+// Right top switch: Stops both winches from going up
+// Left slide switch: stops left winch from going up
+// Zero point: go left until LSS, then Right Up until RTS
+
+// int WaitForStops(uint32_t sleep_time, uint32_t *actual_sleep_time);
+
+
 // direction: down is 0, up is 1
 // side: left is 1, right is 0
 // Reel the winch in, running for |ms| milliseconds.
@@ -94,24 +103,30 @@ int RunBothWinches(uint32_t ms, int direction) {
 // the components need to travel, and the velocities the winches run at.
 //  -------------------------------------------------------------------
 
-int RaiseToDrain() {
+int RaiseToDrain_1() {
   // Assumes we are in the mash state
-  if (RightGoUp(2100)) { // go up until we are close to the top of the kettle
+  if (RightGoUp(600)) { // Go up until the top has cleared.
+                        // We stop here to se if we are caught.
     return -1;
   }
-  // if (RightGoDown(200)) {
-    // return -1;
-  // }
+  return 0;
+}
+
+int RaiseToDrain_2() {
+  // Assumes we are in the mash state
+  if (RightGoUp(1500)) { // go up until we are close to the top of the kettle
+    return -1;
+  }
   return 0;
 }
 
 int MoveToSink() {
   // Raise to limit:
-  RightGoUp(900);
+  if (RightGoUp(900) < 0) return -1;
   // Lower a little:
-  RightGoDown(100);
+  if (RightGoDown(100) < 0) return -1;
   // Now scoot over using both winches:
-  GoRight(3000); // This will quit early when it hits the limit switch
+  if (GoRight(3000) < 0) return -1; // This will quit early when it hits the limit switch
 
   // Now we are over the sink, lower away!
   return RightGoDown(3500);
@@ -125,7 +140,18 @@ int RaiseHops() {
   return LeftGoUp(2500);  // go up a little less than we went down
 }
 
-
+int GoToZero() {
+  // Raise to limit:
+  if (RightGoUp(4000) < 0) return -1;
+  // Lower a little:
+  if (RightGoDown(100) < 0) return -1;
+  // Now scoot over using both winches, until we hit the left slide limit
+  if (GoLeft(3500) < 0) return -1; // This will quit early when it hits the limit switch
+  // Ideally, we would stop both winches when we hit the limit for this move...
+  // Now go back up to the limit:
+  if (RightGoUp(900) < 0) return -1;
+  return 0;
+}
 
 
 void ManualWinchControl(char side, char direction, uint32_t duration_ms) {

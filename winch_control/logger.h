@@ -381,6 +381,39 @@ struct BrewRecipe {
   unsigned boil_minutes = 0;
   double grain_weight_grams;
   double initial_volume_liters = 0, sparge_liters = 0;
+
+  void Print() {
+    std::cout << " brew session: " << session_name << std::endl;
+    std::cout << " boil time: " << boil_minutes << std::endl;
+    std::cout << " Grain Weight: " << grain_weight_grams << std::endl;
+    std::cout << " Initial Water: " << initial_volume_liters << std::endl;
+    std::cout << " Sparge Volume: " << sparge_liters << std::endl;
+    std::cout << " mash steps:: " << std::endl;
+    for (unsigned i = 0; i < mash_temps.size(); ++i) {
+      printf("  %2.2f C, %d minutes\n", mash_temps[i], mash_times[i]);
+    }
+  }
+
+  // This creates the string which is passed to the Grainfather to
+  // Load a session
+  std::string GetSessionCommand() {
+    std::string ret;
+    char buffer[20];
+    snprintf(buffer, 20, "R%u,%u,%2.1f,%2.1f,                  ",
+             boil_minutes, mash_temps.size(), initial_volume_liters, sparge_liters);
+    ret += buffer;
+    // convert name string to all caps
+    snprintf(buffer, 20, "%s                           ", session_name.c_str());
+    ret += buffer;
+    ret += "0,1,1,0,0,         ";
+    ret += "0,0,0,0,           "; // second number is number of additions
+    // we would put in addition times here, but they don't change the heating
+    for (unsigned i = 0; i < mash_temps.size(); ++i) {
+       snprintf(buffer, 20, "%2.1f:%u,                      ", mash_temps[i], mash_times[i]);
+       ret += buffer;
+    }
+    return ret;
+  }
 };
 
 
@@ -523,19 +556,29 @@ class BrewLogger {
     return oauth::ReadValueFromSheets(range.c_str(), spreadsheet_id_.c_str(),
                           sheets_access_.GetAccessToken().c_str());
   }
-  void ReadNewSession() {
-    std::cout << " brew session: " << GetValue(kSessionNameLoc) << std::endl;
-    std::cout << " boil time: " << GetValue(kBoilTimeLoc) << std::endl;
-    std::cout << " Grain Weight: " << GetValue(kGrainWeightLoc) << std::endl;
+  
+  BrewRecipe ReadRecipe() {
+    BrewRecipe recipe;
+    recipe.session_name = GetValue(kSessionNameLoc);
+    recipe.boil_minutes = atoi(GetValue(kBoilTimeLoc).c_str());
+    recipe.grain_weight_grams = atof(GetValue(kGrainWeightLoc).c_str()) * 1000.0;
     std::vector<std::string> mash_times, mash_temps, volumes;
     mash_temps = GetValues(kMashTempsLoc);
     mash_times = GetValues(kMashTimesLoc);
     volumes = GetValues(kWaterVolumesLoc);
-    std::cout << " Initial Water: " << volumes[0] << std::endl;
-    std::cout << " Sparge Volume: " << volumes[1] << std::endl;
-    std::cout << " mash steps:: " << std::endl;
-    for (unsigned i = 0; i < mash_temps.size(); ++i) {
-      printf("  %2.2f C, %d minutes\n", atof(mash_temps[i].c_str()), atoi(mash_times[i].c_str()));
+    recipe.initial_volume_liters = atof(volumes[0].c_str());
+    recipe.sparge_liters = atof(volumes[1].c_str());
+    unsigned mash_steps = mash_temps.size();
+    if (mash_temps.size() != mash_times.size()) {
+      printf("Size of mash temps != mash times\n");
+      if (mash_temps.size() > mash_times.size()) {
+        mash_steps = mash_times.size();
+      }
     }
+    for (unsigned i = 0; i < mash_steps; ++i) {
+      recipe.mash_temps.push_back(atof(mash_temps[i].c_str()));
+      recipe.mash_times.push_back(atoi(mash_times[i].c_str()));
+    }
+    return recipe;
   }
 };

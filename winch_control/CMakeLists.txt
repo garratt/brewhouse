@@ -7,7 +7,7 @@ set (CMAKE_CXX_FLAGS "-std=c++11")
 set (CMAKE_EXE_LINKER_FLAGS "-lcurl -lpthread")
 add_library(twitcurl STATIC ${TWITSOURCES})
 
-add_library(brewhub grainfather2.cc winch.cc scale.cc gpio.cc)
+add_library(brewhub grainfather2.cc brew_session.h winch.cc scale.cc gpio.cc)
 
 add_executable(twitterbrew twitter_brew.cpp)
 TARGET_LINK_LIBRARIES(twitterbrew twitcurl curl pthread)
@@ -21,3 +21,9 @@ TARGET_LINK_LIBRARIES(sheets_test brewhub twitcurl curl pthread)
 
 add_executable(serial_test serial_test.cc)
 
+# set(wxWidgets_CONFIGURATION mswu)
+find_package(wxWidgets COMPONENTS core base REQUIRED)
+include(${wxWidgets_USE_FILE})
+
+add_executable(wxhello hello.cpp)
+target_link_libraries(wxhello ${wxWidgets_LIBRARIES})

@@ -249,7 +249,8 @@ class BrewManager {
     brew_tweeter_.Tweet(twitter_msg);
     sleep(60);
     printf("Mash is Done! Lift and let drain\n");
-    if(winch::RaiseToDrain() < 0) return -1;
+    if(winch::RaiseToDrain_1() < 0) return -1;
+    if(winch::RaiseToDrain_2() < 0) return -1;
 
     brew_tweeter_.Tweet("Okay, draining for 45 minutes.");
     if (WaitMinutes(45)) return -1;

@@ -7,6 +7,7 @@
 #include "gpio.h"
 #include <utility>
 #include <mutex>
+#include <functional>
 
 int64_t GetTimeMsec();
 
@@ -38,6 +39,7 @@ class GrainfatherSerial {
   static constexpr const char *kResumeTimerString = "G                  ";
   static constexpr char kStartChar = 'T';
   static constexpr unsigned kStatusLength = 4 * 17;
+  std::function<void(BrewState)> brew_state_callback_;
   std::mutex state_mutex_;
   bool quit_now_ = false;
   bool read_error_ = false;
@@ -67,10 +69,17 @@ class GrainfatherSerial {
   int TurnHeatOff();
   int QuitSession();
   int AdvanceStage();
+  int PauseTimer();
+  int ResumeTimer();
 
   int LoadSession(const char *session_string);
 
+  // Register a callback to be called when a new brewstate is read:
+  void RegisterBrewStateCallback(std::function<void(BrewState)> callback);
 
+
+  // tests all the commands, to make sure they change the state.
+  int TestCommands();
 
   BrewState ParseState(char in[kStatusLength]);
   // Read status

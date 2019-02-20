@@ -7,7 +7,7 @@
 int main(int argc, char **argv) {
 
   BrewLogger brew_logger("a test session");
-  brew_logger.ReadNewSession();
+  brew_logger.ReadRecipe().Print();
   // brew_logger.GetValues("Overview!G5:G9");
 
 #if 0
