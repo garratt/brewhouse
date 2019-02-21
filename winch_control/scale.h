@@ -6,6 +6,8 @@
 
 #include <fstream>
 #include <vector>
+#include <thread>
+#include <functional>
 #include "gpio.h"
 
 static constexpr int kHX711ResponseLength = 25;
@@ -28,6 +30,8 @@ class WeightFilter {
   double offset_ = 0, scale_ = 0;
   const char *calibration_file_;
   static constexpr double kErrorSentinelValue = -10000;
+  static constexpr double kMinNormalReadingGrams = -10;    // -10 g
+  static constexpr double kMaxNormalReadingGrams = 100000; // 100 kg
   // Default number of readings to take for good average
   static constexpr uint32_t kNumberOfReadings = 30;
   bool verbose_ = false;
@@ -37,12 +41,30 @@ class WeightFilter {
   std::vector<bool> excluded_;
   time_t last_data_ = 0;
 
-  int CollectRawData(int num_readings); 
+
+  bool reading_thread_enabled_ = false;
+  std::thread reading_thread_;
+  std::function<void(double)> weight_callback_;
+
+  int CollectRawData(int num_readings);
   void CalculateStats();
 
   // return the index of the non-excluded run with the largest sigma.
   // should be run after CalculateStats.
   int FindMaxSigma();
+
+  void ReadingThread();
+
+  // Checks if everything is fine:
+  //  - We have calibration loaded
+  //  - We are reading the sensor
+  //  - We are reading normal values
+  // Then starts thread loop continously reading the scale
+  // When a reading is available, (about every 3 seconds)
+  // |callback| will be called with the weight.
+  // This function blocks while it checks the scale readings.
+  // It can take around 3 seconds to return
+  int InitLoop(std::function<void(double)> callback);
 
   public:
 
@@ -76,9 +98,9 @@ class WeightFilter {
   // 3 seconds) until reading is done.
   // This call will also interfere with an ongoing reading using CheckWeight.
   // Don't use both interfaces simultaneously.
-  double GetWeight(bool verbose = false);
+  ScaleStatus GetWeight(bool verbose = false);
 
-  // Not super blocking call. blocks for up to ~5ms, if a reading is availale.
+  // Short blocking call. blocks for up to ~5ms, if a reading is availale.
   // Checks if new weight is available.  If it is, the weight is
   // read out (takes about 1 ms).  If there are enough readings, the
   // readings are filtered and a weight is produced.

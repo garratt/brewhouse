@@ -152,10 +152,39 @@ WeightFilter::WeightFilter(const char *calibration_file) : calibration_file_(cal
   calfile.close();
 }
 
+// Checks if everything is fine:
+//  - We have calibration loaded
+//  - We are reading the sensor
+//  - We are reading normal values
+int WeightFilter::InitLoop(std::function<void(double)> callback) {
+   weight_callback_ = callback;
+   // Check calibration:
+   // Even if offset and scale were small, there is a very low chance
+   // that they would actually both be zero.
+   if (offset_ == 0 && scale_ == 0) {
+     printf("Calibration not loaded!\n");
+     return -1;
+   }
+   // Gather weight data:
+   ScaleStatus status = GetWeight(false);
+   if (status.state != ScaleStatus::READY) {
+     printf("Error reading Scale!\n");
+     return -1;
+   }
+   if (status.weight < kMinNormalReadingGrams ||
+       status.weight > kMaxNormalReadingGrams) {
+     printf("Scale is reading %f, which is out of normal range!\n");
+     return -1;
+   }
+   // Okay, scale passes all the checks. Start the loop!
+  reading_thread_enabled_ = true;
+  reading_thread_ = std::thread(&WeightFilter::ReadingThread, this);
+}
+
 
 double WeightFilter::RemoveOutlierData() {
   excluded_.clear();
-  excluded_.resize(raw_data_.size(), false); 
+  excluded_.resize(raw_data_.size(), false);
   sigma_.resize(raw_data_.size());
   // Need three points for an outlier to exist.
   if (raw_data_.size() == 0) return 0;
@@ -239,15 +268,19 @@ int WeightFilter::Calibrate(double calibration_mass) {
 // 3) Apply scale and offset from calibration
 
 // Take a number of readings, average.
-double WeightFilter::GetWeight(bool verbose) {
+ScaleStatus WeightFilter::GetWeight(bool verbose) {
+  ScaleStatus status;
   verbose_ = verbose;
   if(CollectRawData(kNumberOfReadings)) {
     printf("Failed to collect raw data\n");
-    return kErrorSentinelValue;
+    status.state = ScaleStatus::ERROR;
+    return status;
   }
   double average = RemoveOutlierData();
   printf("average: %f   ", average);
-  return scale_ * (average - offset_);
+  status.state = ScaleStatus::READY;
+  status.weight = scale_ * (average - offset_);
+  return status;
 }
 
 // Checks if new weight is available.  If it is, the weight is
@@ -276,6 +309,8 @@ ScaleStatus WeightFilter::CheckWeight() {
   // Wait for kNumberOfReadings.
   // clears if it has been more than 2 seconds since we got the last reading.
   // at two seconds, this makes the whole sampling time up to 1 minute.
+  // But since the sensor gives readings at 10Hz, normal sampling period is
+  // 3 seconds.
   if (difftime(time(NULL), last_data_) > 2) {
     raw_data_.clear();
   }
@@ -294,6 +329,16 @@ ScaleStatus WeightFilter::CheckWeight() {
 }
 
 
+void WeightFilter::ReadingThread() {
+  while (reading_thread_enabled_) {
+    ScaleStatus status = CheckWeight();
+    if (status.state == ScaleStatus::READY && weight_callback_) {
+      weight_callback_(status.weight);
+    } else {
+      usleep(10000); // Check every 10ms
+    }
+  }
+}
 
 void RunManualCalibration(int calibration_mass, const char *calibration_file) {
     WeightFilter wf(calibration_file);
@@ -318,7 +363,11 @@ void RunManualCalibration(int calibration_mass, const char *calibration_file) {
     }
     printf("Calibration complete. Here are sample weights:\n");
     for (int i = 0; i < 100; ++i) {
-       double val = wf.GetWeight(false);
-       printf("Scale Reads %f\n", val);
+       ScaleStatus status = wf.GetWeight(false);
+       if (status.state == ScaleStatus::READY){
+         printf("Scale Reads %f\n", status.weight);
+       } else {
+         printf("Error reading scale.\n");
+       }
     }
 }

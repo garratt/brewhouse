@@ -123,8 +123,12 @@ void RunTestCommand(int argc, char **argv) {
 
   if (argv[1][0] == 'H') {
     WeightFilter wf("./calibration.txt");
-    double val = wf.GetWeight(false);
-    printf("Scale Reads %f\n", val);
+    ScaleStatus status = wf.GetWeight(false);
+    if (status.state == ScaleStatus::READY){
+      printf("Scale Reads %f\n", status.weight);
+    } else {
+      printf("Error reading scale.\n");
+    }
     return;
   }
   
