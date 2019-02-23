@@ -100,6 +100,7 @@ class BrewSession {
   // All weights are in grams:
   // Weights weights;
   FullBrewState full_state_;
+  WinchController winch_controller_;
 
   struct StateTransition {
     FullBrewState new_state, prev_state;
@@ -345,7 +346,7 @@ class BrewSession {
 
   // Raise a little bit to check that we are not caught
   int RaiseStep1(FullBrewState current_state) {
-    int ret = winch::RaiseToDrain_1();
+    int ret = winch_controller_.RaiseToDrain_1();
     if (ret < 0) {
       return ret;
     }
@@ -356,7 +357,7 @@ class BrewSession {
   }
   // Raise the rest of the way
   int RaiseStep2(FullBrewState current_state) {
-    int ret = winch::RaiseToDrain_2();
+    int ret = winch_controller_.RaiseToDrain_2();
     if (ret < 0) {
       return ret;
     }
@@ -377,7 +378,7 @@ class BrewSession {
 
   int OnDrainComplete(FullBrewState current_state) {
     full_state_.weights.RecordAfterDrain(current_state.weight);
-    int ret = winch::MoveToSink();
+    int ret = winch_controller_.MoveToSink();
     if (ret < 0) {
       return ret;
     }
@@ -400,7 +401,7 @@ class BrewSession {
     return new_state.state.waiting_for_input && !prev_state.state.waiting_for_input;
   }
   int OnBoilTemp(FullBrewState current_state) {
-    int ret = winch::LowerHops();
+    int ret = winch_controller_.LowerHops();
     if (ret < 0) {
       return ret;
     }
@@ -444,7 +445,7 @@ class BrewSession {
   int OnPostBoil1Min(FullBrewState current_state) {
    // 1 minute after boil off
    // Raise Hops
-    int ret = winch::RaiseHops();
+    int ret = winch_controller_.RaiseHops();
     if (ret < 0) {
       return ret;
     }

@@ -7,7 +7,7 @@
 #include "gpio.h"
 
 
-namespace winch {
+namespace raw_winch {
 
 #define RIGHT 0
 #define LEFT 1
@@ -33,6 +33,54 @@ inline int RightGoDown(uint32_t ms) { return RunWinch(ms, 0, 0); }
 inline int GoLeft(uint32_t ms) { return RunBothWinches(ms, 1); }
 inline int GoRight(uint32_t ms) { return RunBothWinches(ms, 0); }
 
+void ManualWinchControl(char side, char direction, uint32_t duration_ms = 200);
+
+} // namespace raw winch
+
+  //TODO: re-zero at known places
+  //add check for reasonable ranges
+  //add more limit switches
+  //correct travel when a stop is reached
+class WinchController {
+  int left_position = 0, right_position = 0;
+  bool enabled = true;
+public:
+inline int LeftGoUp(uint32_t ms) {
+  if (!enabled) return 0;
+  left_position-=ms;
+  raw_winch::LeftGoUp(ms);
+}
+inline int LeftGoDown(uint32_t ms) {
+  if (!enabled) return 0;
+  left_position+=ms;
+  raw_winch::LeftGoDown(ms);
+}
+inline int RightGoUp(uint32_t ms) {
+  if (!enabled) return 0;
+  right_position-=ms;
+  raw_winch::RightGoUp(ms);
+}
+inline int RightGoDown(uint32_t ms) {
+  if (!enabled) return 0;
+  right_position+=ms;
+  raw_winch::RightGoDown(ms);
+}
+inline int GoLeft(uint32_t ms) {
+  if (!enabled) return 0;
+  left_position -= ms;
+  right_position += ms;
+  return raw_winch::GoLeft(ms);
+}
+inline int GoRight(uint32_t ms) {
+  if (!enabled) return 0;
+  left_position += ms;
+  right_position -= ms;
+  return raw_winch::GoRight(ms);
+}
+
+void Enable() { enabled = true; }
+void Disable() { enabled = false; }
+
 // --------------------------------------------------------------------
 // These functions make assumptions about the distances
 // the components need to travel, and the velocities the winches run at.
@@ -47,6 +95,5 @@ int LowerHops();
 int RaiseHops();
 int GoToZero();
 
-void ManualWinchControl(char side, char direction, uint32_t duration_ms = 200);
+};
 
-} // namespace winch

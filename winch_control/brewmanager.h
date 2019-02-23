@@ -101,7 +101,7 @@ class BrewManager {
    return (weight-kGrainfatherWOTun_Grams) / (specific_gravity * 1000.0);
  }
 
-
+ WinchController winch_controller_; 
  double weight_trigger_level_;
  public:
   BrewManager(const char *brew_session) : brewlogger_(brew_session),
@@ -249,8 +249,8 @@ class BrewManager {
     brew_tweeter_.Tweet(twitter_msg);
     sleep(60);
     printf("Mash is Done! Lift and let drain\n");
-    if(winch::RaiseToDrain_1() < 0) return -1;
-    if(winch::RaiseToDrain_2() < 0) return -1;
+    if(winch_controller_.RaiseToDrain_1() < 0) return -1;
+    if(winch_controller_.RaiseToDrain_2() < 0) return -1;
 
     brew_tweeter_.Tweet("Okay, draining for 45 minutes.");
     if (WaitMinutes(45)) return -1;
@@ -263,7 +263,7 @@ class BrewManager {
     printf("Skip to Boil\n");
     HitButton(SET_BUTTON);
 
-    if(winch::MoveToSink() < 0) return -1;
+    if(winch_controller_.MoveToSink() < 0) return -1;
 
     // Wait for beeping, which indicates boil reached
     if (WaitForBeeping(90)) return -1;
@@ -273,7 +273,7 @@ class BrewManager {
     HitButton(SET_BUTTON);
     printf("Boil Reached\n");
 
-    if (winch::LowerHops() < 0) return -1;
+    if (winch_controller_.LowerHops() < 0) return -1;
 
     HitButton(PUMP_BUTTON);
     HitButton(SET_BUTTON);
@@ -284,7 +284,7 @@ class BrewManager {
     printf("Boil Done\n");
 
     WaitMinutes(3);
-    winch::RaiseHops();
+    winch_controller_.RaiseHops();
     // Wait to get some more weight readings
     WaitMinutes(3);
     double after_boil_weight = weight_limiter_.GetWeight();

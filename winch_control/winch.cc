@@ -4,7 +4,7 @@
 
 #include "winch.h"
 
-namespace winch {
+namespace raw_winch {
 
 
 // Right slide switch: no effect on winches
@@ -98,60 +98,6 @@ int RunBothWinches(uint32_t ms, int direction) {
    return 0;
 }
 
-// --------------------------------------------------------------------
-// These functions make assumptions about the distances
-// the components need to travel, and the velocities the winches run at.
-//  -------------------------------------------------------------------
-
-int RaiseToDrain_1() {
-  // Assumes we are in the mash state
-  if (RightGoUp(600)) { // Go up until the top has cleared.
-                        // We stop here to se if we are caught.
-    return -1;
-  }
-  return 0;
-}
-
-int RaiseToDrain_2() {
-  // Assumes we are in the mash state
-  if (RightGoUp(1500)) { // go up until we are close to the top of the kettle
-    return -1;
-  }
-  return 0;
-}
-
-int MoveToSink() {
-  // Raise to limit:
-  if (RightGoUp(900) < 0) return -1;
-  // Lower a little:
-  if (RightGoDown(100) < 0) return -1;
-  // Now scoot over using both winches:
-  if (GoRight(3000) < 0) return -1; // This will quit early when it hits the limit switch
-
-  // Now we are over the sink, lower away!
-  return RightGoDown(3500);
-}
-
-int LowerHops() {
-  return LeftGoDown(3000);
-}
-
-int RaiseHops() {
-  return LeftGoUp(2500);  // go up a little less than we went down
-}
-
-int GoToZero() {
-  // Raise to limit:
-  if (RightGoUp(4000) < 0) return -1;
-  // Lower a little:
-  if (RightGoDown(100) < 0) return -1;
-  // Now scoot over using both winches, until we hit the left slide limit
-  if (GoLeft(3500) < 0) return -1; // This will quit early when it hits the limit switch
-  // Ideally, we would stop both winches when we hit the limit for this move...
-  // Now go back up to the limit:
-  if (RightGoUp(900) < 0) return -1;
-  return 0;
-}
 
 
 void ManualWinchControl(char side, char direction, uint32_t duration_ms) {
@@ -163,4 +109,59 @@ void ManualWinchControl(char side, char direction, uint32_t duration_ms) {
   if (side == 'b' && direction == 'r') RunBothWinches(duration_ms, 0);
 }
 
-} // namespace winch
+} // namespace raw_winch
+
+// --------------------------------------------------------------------
+// These functions make assumptions about the distances
+// the components need to travel, and the velocities the winches run at.
+//  -------------------------------------------------------------------
+
+int WinchController::RaiseToDrain_1() {
+  // Assumes we are in the mash state
+  if (RightGoUp(600)) { // Go up until the top has cleared.
+                        // We stop here to se if we are caught.
+    return -1;
+  }
+  return 0;
+}
+
+int WinchController::RaiseToDrain_2() {
+  // Assumes we are in the mash state
+  if (RightGoUp(1500)) { // go up until we are close to the top of the kettle
+    return -1;
+  }
+  return 0;
+}
+
+int WinchController::MoveToSink() {
+  // Raise to limit:
+  if (RightGoUp(900) < 0) return -1;
+  // Lower a little:
+  if (RightGoDown(100) < 0) return -1;
+  // Now scoot over using both winches:
+  if (GoRight(3000) < 0) return -1; // This will quit early when it hits the limit switch
+
+  // Now we are over the sink, lower away!
+  return RightGoDown(3500);
+}
+
+int WinchController::LowerHops() {
+  return LeftGoDown(3000);
+}
+
+int WinchController::RaiseHops() {
+  return LeftGoUp(2500);  // go up a little less than we went down
+}
+
+int WinchController::GoToZero() {
+  // Raise to limit:
+  if (RightGoUp(4000) < 0) return -1;
+  // Lower a little:
+  if (RightGoDown(100) < 0) return -1;
+  // Now scoot over using both winches, until we hit the left slide limit
+  if (GoLeft(3500) < 0) return -1; // This will quit early when it hits the limit switch
+  // Ideally, we would stop both winches when we hit the limit for this move...
+  // Now go back up to the limit:
+  if (RightGoUp(900) < 0) return -1;
+  return 0;
+}

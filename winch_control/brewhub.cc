@@ -155,29 +155,30 @@ void RunTestCommand(int argc, char **argv) {
     bt.Test_ListenForBeeps();
     return;
   }
+  WinchController winch_controller_;
 
   if (argv[1][0] == '1') {
-    winch::RaiseToDrain_1();
+    winch_controller_.RaiseToDrain_1();
     return;
   }
 
   if (argv[1][0] == '2') {
-    winch::RaiseToDrain_2();
+    winch_controller_.RaiseToDrain_2();
     return;
   }
 
   if (argv[1][0] == '3') {
-    winch::MoveToSink();
+    winch_controller_.MoveToSink();
     return;
   }
 
   if (argv[1][0] == '4') {
-    winch::LowerHops();
+    winch_controller_.LowerHops();
     return;
   }
 
   if (argv[1][0] == '5') {
-    winch::RaiseHops();
+    winch_controller_.RaiseHops();
     return;
   }
 
@@ -198,7 +199,7 @@ void RunTestCommand(int argc, char **argv) {
   }
 
   if (argv[1][0] == 'l' || argv[1][0] == 'r' || argv[1][0] == 'b') {
-    winch::ManualWinchControl(argv[1][0], argv[1][1], ms);
+    raw_winch::ManualWinchControl(argv[1][0], argv[1][1], ms);
   }
 
 }
