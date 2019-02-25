@@ -506,6 +506,8 @@ BrewRecipe BrewLogger::ReadRecipe() {
   recipe.session_name = GetValue(kSessionNameLoc);
   recipe.boil_minutes = atoi(GetValue(kBoilTimeLoc).c_str());
   recipe.grain_weight_grams = atof(GetValue(kGrainWeightLoc).c_str()) * 1000.0;
+  recipe.hops_grams = atof(GetValue(kHopsWeightLoc).c_str());
+  recipe.hops_type = GetValue(kHopsTypeLoc);
   std::vector<std::string> mash_times, mash_temps, volumes;
   mash_temps = GetValues(kMashTempsLoc);
   mash_times = GetValues(kMashTimesLoc);

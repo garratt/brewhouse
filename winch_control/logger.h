@@ -7,6 +7,7 @@
 #include <vector>
 #include <mutex>
 
+#pragma once
 
 struct BrewRecipe {
   std::string session_name;
@@ -14,6 +15,8 @@ struct BrewRecipe {
   std::vector<uint32_t> mash_times;
   unsigned boil_minutes = 0;
   double grain_weight_grams;
+  double hops_grams;
+  std::string hops_type;
   double initial_volume_liters = 0, sparge_liters = 0;
 
   void Print();
@@ -39,6 +42,16 @@ class BrewLogger {
 
   void LogWeight(double grams, time_t log_time = 0);
 
+  // Set a new spreadsheet for the session.
+  // Verifies that this spreadsheet has some required components,
+  // and that we are not overwriting a previous session
+  // return: -1: error
+  //          0: everything fine, starting at beginning
+  //          1: starting at the middle of a brew
+  int SetSession(const char *spreadsheet_id = "");
+
+  
+
   BrewRecipe ReadRecipe();
 
  private:
@@ -57,6 +70,8 @@ class BrewLogger {
   static constexpr const char *kMashTempsLoc = "Overview!G5:G9";
   static constexpr const char *kBoilTimeLoc = "Overview!G11";
   static constexpr const char *kGrainWeightLoc = "Overview!B7";
+  static constexpr const char *kHopsWeightLoc = "Overview!C15";
+  static constexpr const char *kHopsTypeLoc = "Overview!A15";
   static constexpr const char *kInitialVolumeLoc = "Overview!G14";
   static constexpr const char *kSpargeVolumeLoc = "Overview!G15";
   static constexpr const char *kWaterVolumesLoc = "Overview!G14:G15";

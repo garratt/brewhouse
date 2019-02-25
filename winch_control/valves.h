@@ -38,7 +38,6 @@ void Test_Valves(char valve_arg) {
   switch (valve_arg) {
     case 'F':
       SetFlow(NO_PATH);
-      HitButton(PUMP_BUTTON);
       SetFlow(KETTLE);
       sleep(10);
       SetFlow(CHILLER);
@@ -46,7 +45,6 @@ void Test_Valves(char valve_arg) {
       SetFlow(CARBOY);
       sleep(10);
       SetFlow(NO_PATH);
-      HitButton(PUMP_BUTTON);
       break;
     case 'K':
       SetFlow(KETTLE);

@@ -17,6 +17,48 @@ int WaitForHX711(uint8_t data_pin = SCALE_DATA, uint8_t sclk = SCALE_SCLK);
 
 double ReadHX711Data(uint8_t data_pin = SCALE_DATA, uint8_t sclk = SCALE_SCLK);
 
+struct WeightLimiter {
+  time_t last_log_ = 0;
+  time_t first_log_ = 0;
+  int count_ = 0;
+  double sum_ = 0;
+  // if the reading is this far from the average, return the average and
+  // start a new set.
+  static constexpr int kMaxDeviationGrams = 30;
+  // If there is a jump in weight logging, return the average and start a new set
+  static constexpr int kMaxTimeJumpSeconds = 60;
+  // This is the rate at which we log, even if the weight is constant
+  static constexpr int kLoggingPeriodSeconds = 300; // 5 minutes
+  
+  bool PublishWeight(double weight_in, double *weight_out, time_t *log_time) {
+    // If it is the first weight, publish it and save it.
+    time_t now = time(NULL);
+    if (count_ == 0) {
+      last_log_ = now;
+      count_ = 1;
+      sum_ = weight_in;
+    }
+    double average = sum_ / count_;
+    double dev = average > weight_in ? average - weight_in : weight_in - average;
+    if (dev > kMaxDeviationGrams || difftime(now, last_log_) > kMaxTimeJumpSeconds
+        || difftime(now, first_log_) > kLoggingPeriodSeconds) {
+      // We always report the previous readings, and leave our current reading
+      *weight_out = average;
+      *log_time = last_log_;
+      last_log_ = now;
+      first_log_ = now;
+      count_ = 1;
+      sum_ = weight_in;
+      return true;
+    }
+    // Otherwise, just record the reading
+    count_++;
+    sum_ += weight_in;
+    return false;
+  }
+
+  double GetWeight() { return count_ ? sum_ / count_ : 0; }
+};
 
 struct ScaleStatus {
    static constexpr unsigned NONE = 0;
@@ -54,6 +96,22 @@ class WeightFilter {
   int FindMaxSigma();
 
   void ReadingThread();
+  
+  // Removes all data points with the largest sigma until the 
+  // std deviation falls below a certain threshold.
+  // returns the average of the data.
+  // TODO: incorporate slope...
+  double RemoveOutlierData();
+
+  // Short blocking call. blocks for up to ~5ms, if a reading is availale.
+  // Checks if new weight is available.  If it is, the weight is
+  // read out (takes about 1 ms).  If there are enough readings, the
+  // readings are filtered and a weight is produced.
+  ScaleStatus CheckWeight();
+
+  public:
+
+  int CheckScale();
 
   // Checks if everything is fine:
   //  - We have calibration loaded
@@ -64,19 +122,11 @@ class WeightFilter {
   // |callback| will be called with the weight.
   // This function blocks while it checks the scale readings.
   // It can take around 3 seconds to return
-  int InitLoop(std::function<void(double)> callback);
-
-  public:
+  void InitLoop(std::function<void(double)> callback);
 
   // Initialize with calibration.  Creates file otherwise, and writes to it on
   // calls to Calibrate()
   WeightFilter(const char *calibration_file);
-
-  // Removes all data points with the largest sigma until the 
-  // std deviation falls below a certain threshold.
-  // returns the average of the data.
-  // TODO: incorporate slope...
-  double RemoveOutlierData();
 
   // Assume that the load cell value is linear with weight (which is the whole point right?)
   // Calibrate will need to be called with calibration_mass == 0, then again with
@@ -100,11 +150,6 @@ class WeightFilter {
   // Don't use both interfaces simultaneously.
   ScaleStatus GetWeight(bool verbose = false);
 
-  // Short blocking call. blocks for up to ~5ms, if a reading is availale.
-  // Checks if new weight is available.  If it is, the weight is
-  // read out (takes about 1 ms).  If there are enough readings, the
-  // readings are filtered and a weight is produced.
-  ScaleStatus CheckWeight();
 };
 
 

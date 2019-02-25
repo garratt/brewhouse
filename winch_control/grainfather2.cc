@@ -196,6 +196,13 @@ void GrainfatherSerial::RegisterBrewStateCallback(std::function<void(BrewState)>
   brew_state_callback_ = callback;
 }
 
+
+int GrainfatherSerial::Init(std::function<void(BrewState)> callback) {
+  brew_state_callback_ = callback;
+
+}
+
+
 // Read status
 void GrainfatherSerial::ReadStatusThread() {
   while (!quit_now_) {

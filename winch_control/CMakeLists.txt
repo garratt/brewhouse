@@ -7,7 +7,7 @@ set (CMAKE_CXX_FLAGS "-std=c++14")
 set (CMAKE_EXE_LINKER_FLAGS "-lcurl -lpthread")
 add_library(twitcurl STATIC ${TWITSOURCES})
 
-add_library(brewhub grainfather2.cc brew_session.h winch.cc scale.cc gpio.cc logger.h logger.cc)
+add_library(brewhub grainfather2.cc brew_session.cc winch.cc scale.cc gpio.cc logger.h logger.cc)
 
 add_executable(twitterbrew twitter_brew.cpp)
 TARGET_LINK_LIBRARIES(twitterbrew twitcurl curl pthread)

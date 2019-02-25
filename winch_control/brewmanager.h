@@ -21,48 +21,6 @@
 #include "brewtweeter.h"
 
 
-struct WeightLimiter {
-  time_t last_log_ = 0;
-  time_t first_log_ = 0;
-  int count_ = 0;
-  double sum_ = 0;
-  // if the reading is this far from the average, return the average and
-  // start a new set.
-  static constexpr int kMaxDeviationGrams = 30;
-  // If there is a jump in weight logging, return the average and start a new set
-  static constexpr int kMaxTimeJumpSeconds = 60;
-  // This is the rate at which we log, even if the weight is constant
-  static constexpr int kLoggingPeriodSeconds = 300; // 5 minutes
-  
-  bool PublishWeight(double weight_in, double *weight_out, time_t *log_time) {
-    // If it is the first weight, publish it and save it.
-    time_t now = time(NULL);
-    if (count_ == 0) {
-      last_log_ = now;
-      count_ = 1;
-      sum_ = weight_in;
-    }
-    double average = sum_ / count_;
-    double dev = average > weight_in ? average - weight_in : weight_in - average;
-    if (dev > kMaxDeviationGrams || difftime(now, last_log_) > kMaxTimeJumpSeconds
-        || difftime(now, first_log_) > kLoggingPeriodSeconds) {
-      // We always report the previous readings, and leave our current reading
-      *weight_out = average;
-      *log_time = last_log_;
-      last_log_ = now;
-      first_log_ = now;
-      count_ = 1;
-      sum_ = weight_in;
-      return true;
-    }
-    // Otherwise, just record the reading
-    count_++;
-    sum_ += weight_in;
-    return false;
-  }
-
-  double GetWeight() { return count_ ? sum_ / count_ : 0; }
-};
 
 
 class BrewManager {
@@ -133,10 +91,13 @@ class BrewManager {
       // Checks if new weight is available.  If it is, the weight is
       // read out (takes about 1 ms).  If there are enough readings, the
       // readings are filtered and a weight is produced.
-      auto weight_status = weight_filter_.CheckWeight();
+// !!!!!! ---------  Commented because we made this private... ------ !!!!!!!!!!!!
+#if WE_ARE_NOT_USING_THIS_LIBRARY
+      // auto weight_status = weight_filter_.CheckWeight();
       if (HandleStatusUpdate(beep_status, weight_status)) {
         return 0;
       }
+#endif
     } while (difftime(time(NULL), begin) < timeout_sec);
     // if we were waiting for a fixed amount of time, return 0.
     if (interrupt_trigger_ == InterruptTrigger::TIMER) {

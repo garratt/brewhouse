@@ -156,8 +156,7 @@ WeightFilter::WeightFilter(const char *calibration_file) : calibration_file_(cal
 //  - We have calibration loaded
 //  - We are reading the sensor
 //  - We are reading normal values
-int WeightFilter::InitLoop(std::function<void(double)> callback) {
-   weight_callback_ = callback;
+int WeightFilter::CheckScale() {
    // Check calibration:
    // Even if offset and scale were small, there is a very low chance
    // that they would actually both be zero.
@@ -177,6 +176,12 @@ int WeightFilter::InitLoop(std::function<void(double)> callback) {
      return -1;
    }
    // Okay, scale passes all the checks. Start the loop!
+   return 0;
+}
+
+
+void WeightFilter::InitLoop(std::function<void(double)> callback) {
+  weight_callback_ = callback;
   reading_thread_enabled_ = true;
   reading_thread_ = std::thread(&WeightFilter::ReadingThread, this);
 }

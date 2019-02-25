@@ -46,14 +46,6 @@ class GrainfatherSerial {
   int fd_;
 
   int Connect(const char *path);
-
-  BrewState latest_state_, previous_state_;
- public:
-  // Gets the latest state.  If |prev_read| == 0,
-  // just pulls the value of latest_state_ in a protected fashion.
-  // Otherwise, waits until a state is available
-  BrewState GetLatestState(int64_t prev_read = 0);
-
   int SendSerial(std::string to_send);
 
   // Runs a command, and ensures that is completes successfully.  Blocks until
@@ -62,6 +54,13 @@ class GrainfatherSerial {
   //           already, or after the command
   // returns -1 for all errors
   int CommandAndVerify(const char *command, bool (*verify_condition)(BrewState));
+
+  BrewState latest_state_, previous_state_;
+ public:
+  // Gets the latest state.  If |prev_read| == 0,
+  // just pulls the value of latest_state_ in a protected fashion.
+  // Otherwise, waits until a state is available
+  BrewState GetLatestState(int64_t prev_read = 0);
 
   int TurnPumpOn();
   int TurnPumpOff();
@@ -77,6 +76,8 @@ class GrainfatherSerial {
   // Register a callback to be called when a new brewstate is read:
   void RegisterBrewStateCallback(std::function<void(BrewState)> callback);
 
+  // Test all the commands and register a callback for brewstate updates
+  int Init(std::function<void(BrewState)> callback);
 
   // tests all the commands, to make sure they change the state.
   int TestCommands();
