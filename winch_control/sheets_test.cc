@@ -6,7 +6,7 @@
 #include "grainfather2.h"
 int main(int argc, char **argv) {
 
-  BrewLogger brew_logger("a test session");
+  BrewLogger brew_logger;
   brew_logger.ReadRecipe().Print();
   // brew_logger.GetValues("Overview!G5:G9");
 

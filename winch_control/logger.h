@@ -32,9 +32,10 @@ class OathAccess;
 
 // This class logs data to a google spreadsheet
 class BrewLogger {
+  bool disable_for_test_ = false;
  public:
 
-  BrewLogger(const char *spreadsheet_id = "");
+  BrewLogger();
   ~BrewLogger();
 
   const char *levels_[5] = {"Debug", "Info", "Warning", "Error", "Fatal"};
@@ -50,7 +51,7 @@ class BrewLogger {
   //          1: starting at the middle of a brew
   int SetSession(const char *spreadsheet_id = "");
 
-  
+  void DisableForTest() { disable_for_test_ = true; }
 
   BrewRecipe ReadRecipe();
 

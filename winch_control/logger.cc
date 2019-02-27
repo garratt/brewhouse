@@ -436,7 +436,12 @@ void BrewLogger::EnqueueMessage(std::string cell_range, std::string sheet_id,
   message_queue_.push_back(message);
 }
 
-BrewLogger::BrewLogger(const char *spreadsheet_id) {
+BrewLogger::BrewLogger() {
+}
+
+// TODO: do checks to make sure the sheet is valid
+int BrewLogger::SetSession(const char *spreadsheet_id) {
+  if (disable_for_test_) return 0;
   const char *kSheetsScope = "https://www.googleapis.com/auth/spreadsheets";
   const char *kDriveScope = "https://www.googleapis.com/auth/drive";
   sheets_access_ = std::make_unique<oauth::OathAccess>(kSheetsScope, "sheets");
@@ -453,14 +458,18 @@ BrewLogger::BrewLogger(const char *spreadsheet_id) {
   }
   // because std::thread is movable, just assign another one there:
   message_thread_ = std::thread(&BrewLogger::SendMessages, this);
+  return 0;
 }
+
 
 BrewLogger::~BrewLogger() {
   quit_threads_ = true;
+  if (disable_for_test_) return;
   message_thread_.join();
 }
 
 void BrewLogger::Log(int severity, std::string message) {
+  if (disable_for_test_) return;
   // take timestamp
   timespec tm;
   clock_gettime(CLOCK_REALTIME, &tm);
@@ -475,6 +484,7 @@ void BrewLogger::Log(int severity, std::string message) {
 }
 
 void BrewLogger::LogWeight(double grams, time_t log_time) {
+  if (disable_for_test_) return;
   // time, time, weight
   timespec tm;
   if (log_time == 0) {
@@ -501,7 +511,23 @@ std::string BrewLogger::GetValue(std::string range) {
                                     sheets_access_->GetAccessToken().c_str());
 }
 
+
+BrewRecipe fake_recipe = {
+ .session_name = "Fake Recipe",
+ .mash_temps = {10.0, 12.0},
+ .mash_times = {1, 2},
+ .boil_minutes = 1,
+ .grain_weight_grams = 8000,
+ .hops_grams = 56,
+ .hops_type = "Bestest Hops",
+ .initial_volume_liters = 23.0,
+ .sparge_liters = 0.5 };
+
+
+
+
 BrewRecipe BrewLogger::ReadRecipe() {
+  if (disable_for_test_) return fake_recipe;
   BrewRecipe recipe;
   recipe.session_name = GetValue(kSessionNameLoc);
   recipe.boil_minutes = atoi(GetValue(kBoilTimeLoc).c_str());

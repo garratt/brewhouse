@@ -62,11 +62,12 @@ class BrewManager {
  WinchController winch_controller_; 
  double weight_trigger_level_;
  public:
-  BrewManager(const char *brew_session) : brewlogger_(brew_session),
+  BrewManager(const char *brew_session) : brewlogger_(),
                                           weight_filter_("scale_calibration.txt") {
 
     std::string message = "Starting a new brew! Brewing: ";
 
+    brewlogger_.SetSession(brew_session);
     brew_tweeter_.Tweet(message + brew_session);
     if(InitIO() < 0) {
       printf("Failed during initialization. Make sure you can write to all gpios!\n");

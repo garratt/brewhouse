@@ -14,6 +14,7 @@
 #include <utility>
 #include <deque>
 #include <mutex>
+#include <assert.h>
 #include <vector>
 #include <list>
 #include <functional>
@@ -48,11 +49,11 @@ struct Times {
   void RecordBoilStart(int64_t t) { boil_start_time = t; }
 };
 
-enum BrewStage { PREMASH, MASHING, DRAINING, BOILING, CHILLING, DECANTING, DONE};
+enum BrewStage { PREMASH, MASHING, DRAINING, BOILING, CHILLING, DECANTING, DONE, CANCELLED};
 
 struct FullBrewState {
  uint32_t weight;
- BrewStage current_stage;
+ BrewStage current_stage = PREMASH;
  BrewState state;
  Weights weights;
  Times times;
@@ -66,6 +67,7 @@ class BrewSession {
   GrainfatherSerial grainfather_serial_;
   FullBrewState full_state_;
   WinchController winch_controller_;
+  WeightLimiter weight_limiter_;
   BrewLogger brew_logger_;
   WeightFilter scale_;
   UserInterface user_interface_;
@@ -73,6 +75,25 @@ class BrewSession {
   static constexpr uint32_t kWeightLossThresholdGrams = 75;
   static constexpr uint32_t kGrainfatherPickupThresholdGrams = 75;
 
+  bool logger_disabled_ = false;
+  bool grainfather_disabled_ = false;
+  bool winch_disabled_ = false;
+  bool scale_disabled_ = false;
+  bool zippy_time_ = false;
+
+  void SetOfflineTest() { brew_logger_.DisableForTest();  logger_disabled_ = true; }
+  void SetFakeGrainFather() {grainfather_serial_.DisableForTest();  grainfather_disabled_ = true; }
+  void SetFakeWinch() { winch_controller_.Disable(); winch_disabled_ = true; }
+  void SetFakeScale() { scale_.DisableForTest(); scale_disabled_ = true; }
+  void SetZippyTime() { zippy_time_ = true; }
+
+  void RunForReal() {
+    assert(logger_disabled_ == false);
+    assert(winch_disabled_ == false);
+    assert(scale_disabled_ == false);
+    assert(grainfather_disabled_ == false);
+    assert(zippy_time_ == false);
+  }
 
   struct StateTransition {
     FullBrewState new_state, prev_state;
@@ -100,6 +121,7 @@ class BrewSession {
 
   // Called by other thread, when new state is recorded
   void OnNewBrewState(BrewState new_state);
+  void RecordNewState(FullBrewState new_state, FullBrewState prev_state);
 
 
   int LoadTriggers();

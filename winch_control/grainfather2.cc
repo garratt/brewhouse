@@ -65,6 +65,7 @@ BrewState GrainfatherSerial::GetLatestState(int64_t prev_read) {
 //           already, or after the command
 // returns -1 for all errors
 int GrainfatherSerial::CommandAndVerify(const char *command, bool (*verify_condition)(BrewState)) {
+  if (disable_for_test_) return 0; //TODO: actually change state to simulate brew
   BrewState latest = GetLatestState();
   if (!latest.valid) return -1;
   // Already met condition, i.e. We asked to turn pump on, but it already was on.

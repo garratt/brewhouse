@@ -110,6 +110,7 @@ class WeightFilter {
   ScaleStatus CheckWeight();
 
   public:
+  void DisableForTest(); // TODO
 
   int CheckScale();
 

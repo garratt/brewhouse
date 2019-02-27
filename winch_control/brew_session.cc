@@ -31,6 +31,13 @@ void BrewSession::OnNewWeight(double new_weight) {
   new_transition.prev_state = full_state_;
   new_transition.new_state = full_state_;
   new_transition.new_state.weight = new_weight;
+  // log weight to the spreadsheet.  weight_limiter_ makes sure we only log
+  // often when the weight is changing.
+  double weight_out;
+  time_t log_time;
+  if (weight_limiter_.PublishWeight(new_weight, &weight_out, &log_time)) {
+    brew_logger_.LogWeight(weight_out, log_time);
+  }
   {
     std::lock_guard<std::mutex> lock(tq_mutex_);
     transition_queue_.push_back(new_transition);
@@ -39,11 +46,28 @@ void BrewSession::OnNewWeight(double new_weight) {
 
 // Called by other thread, when new state is recorded
 void BrewSession::OnNewBrewState(BrewState new_state) {
-  // TODO: update current_stage based on state
   StateTransition new_transition;
   new_transition.prev_state = full_state_;
   new_transition.new_state = full_state_;
   new_transition.new_state.state = new_state;
+  // TODO: update current_stage based on state
+// enum BrewStage { PREMASH, MASHING, DRAINING, BOILING, CHILLING, DECANTING, DONE, CANCELLED};
+  int mash_steps = brew_recipe_.mash_times.size();
+  // {1,mash_steps} -> mashing
+  //  1+mash_steps -> Draining
+  //  2+mash_steps -> Boiling
+  if (new_state.stage > 0 && new_state.stage < mash_steps) {
+      new_transition.new_state.current_stage = MASHING;
+  }
+  if (new_state.stage == mash_steps + 1) {
+      new_transition.new_state.current_stage = DRAINING;
+  }
+  if (new_state.stage == mash_steps + 2) {
+      new_transition.new_state.current_stage = BOILING;
+  }
+  // TODO: Check if the grainfather registers anything after boil.
+
+
   {
     std::lock_guard<std::mutex> lock(tq_mutex_);
     transition_queue_.push_back(new_transition);
@@ -55,6 +79,22 @@ void BrewSession::AddTimeTrigger(int64_t trigger_time, TriggerFunc trigger_func)
         const FullBrewState &prev_state ) {
       return new_state.state.read_time > trigger_time; },
       trigger_func, false);
+}
+
+#define UPDATE_ON_CHANGE(var) \
+  if (new_state.var != prev_state.var) { \
+    full_state_.var = new_state.var;     \
+  }                                      \
+
+
+
+void BrewSession::RecordNewState(FullBrewState new_state, FullBrewState prev_state) {
+  // take all the new values, leave anything that did not change
+  UPDATE_ON_CHANGE(weight);
+  UPDATE_ON_CHANGE(current_stage);
+  // UPDATE_ON_CHANGE(weights);
+  // UPDATE_ON_CHANGE(times);
+  UPDATE_ON_CHANGE(state);
 }
 
 void BrewSession::CheckTriggerThread() {
@@ -83,11 +123,15 @@ void BrewSession::CheckTriggerThread() {
         printf("Error processing event\n");
       }
       if (ret == BREW_ERROR) {
+        GlobalPause();
         // Pause and tweet
       }
       if (ret == BREW_FATAL) {
+        QuitSession();
         // Stop the brew process
       }
+      // Otherwise, record the new state
+      RecordNewState(transition.new_state, transition.prev_state);
     } else {
       int64_t time_now = GetTimeMsec();
       if (time_now - last_event > kMaxTimeBetweenEvents) {

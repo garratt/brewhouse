@@ -23,6 +23,26 @@ struct BrewState {
   double current_temp, target_temp, percent_heating;
   uint8_t stage, substage;
   bool valid = false;
+
+  bool operator!=(const BrewState& other) {
+    if (timer_on != other.timer_on) return true;
+    if (timer_paused != other.timer_paused) return true;
+    if (timer_seconds_left != other.timer_seconds_left) return true;
+    if (timer_total_seconds != other.timer_total_seconds) return true;
+    if (waiting_for_input != other.waiting_for_input) return true;
+    if (waiting_for_temp != other.waiting_for_temp) return true;
+    if (brew_session_loaded != other.brew_session_loaded) return true;
+    if (heater_on != other.heater_on) return true;
+    if (pump_on != other.pump_on) return true;
+    if (current_temp != other.current_temp) return true;
+    if (target_temp != other.target_temp) return true;
+    if (percent_heating != other.percent_heating) return true;
+    if (stage != other.stage) return true;
+    if (substage != other.substage) return true;
+    if (valid != other.valid) return true;
+    return false;
+  }
+
 };
 
 
@@ -44,6 +64,7 @@ class GrainfatherSerial {
   bool quit_now_ = false;
   bool read_error_ = false;
   int fd_;
+  bool disable_for_test_ = false;
 
   int Connect(const char *path);
   int SendSerial(std::string to_send);
@@ -85,6 +106,8 @@ class GrainfatherSerial {
   BrewState ParseState(char in[kStatusLength]);
   // Read status
   void ReadStatusThread();
+
+  void DisableForTest() { disable_for_test_ = true; }
 };
 
 
