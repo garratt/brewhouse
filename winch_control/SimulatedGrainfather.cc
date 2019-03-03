@@ -4,6 +4,9 @@
 
 #include "SimulatedGrainfather.h"
 
+#define DEBUG_LOG(x) printf(x)
+
+
 void SimulatedGrainfather::ReceiveSerial(const char *serial_in) {
   switch (serial_in[0]) {
     case 'L':
@@ -32,6 +35,14 @@ void SimulatedGrainfather::ReceiveSerial(const char *serial_in) {
       break;
     case 'G':
       TogglePause();
+      break;
+    case 'R':
+      BrewRecipe recipe;
+      if (recipe.Load(serial_in) == 0) {
+        LoadSession(recipe);
+      } else {
+        printf("Failed to load recipe!\n");
+      }
       break;
   }
 }
@@ -66,50 +77,67 @@ void SimulatedGrainfather::Reset() {
 
 void SimulatedGrainfather::LoadSession(BrewRecipe recipe) {
   recipe_ = recipe;
+  current_state_.brew_session_loaded = true;
   current_state_.waiting_for_input = true;
   waiting_for_start_heating = true;
+  DEBUG_LOG("Waiting for input to start heating\n");
   current_state_.target_temp = recipe_.mash_temps[0];
 }
 
 void SimulatedGrainfather::Advance() {
-  if (!current_state_.waiting_for_input) return;
+  if (!current_state_.waiting_for_input) {
+    DEBUG_LOG("Asked to advance, but not waiting for input\n");
+    return;
+  }
   current_state_.waiting_for_input = false;
   if (waiting_for_start_heating) {
+    DEBUG_LOG("Advancing to start heating\n");
     current_state_.heater_on = true;
     current_state_.waiting_for_temp = true;
+    current_state_.target_temp = recipe_.mash_temps[0];
+    DEBUG_LOG("Heating for first mash temp\n");
     current_state_.stage = 1;
     waiting_for_start_heating = false;
     return;
   }
   if (waiting_for_mash_start) {
+    DEBUG_LOG("Advancing to start mashing\n");
     current_state_.timer_total_seconds = recipe_.mash_times[0];
     current_state_.timer_seconds_left = recipe_.mash_times[0];
     current_state_.timer_on = true;
+    DEBUG_LOG("Starting timer for mash\n");
     waiting_for_mash_start = false;
     return;
   }
   if (waiting_for_start_sparge) {
+    DEBUG_LOG("Advancing to start sparging\n");
     current_state_.waiting_for_input = true;
+    DEBUG_LOG("Waiting for input to finish sparge\n");
     waiting_for_sparge_done = true;
     waiting_for_start_sparge = false;
     return;
   }
   if (waiting_for_sparge_done) {
+    DEBUG_LOG("Advancing to finish sparging\n");
     current_state_.heater_on = true;
     current_state_.stage++;
     current_state_.target_temp = boil_temp_;
     current_state_.waiting_for_temp = true;
+    DEBUG_LOG("Heating for boil temp\n");
     waiting_for_sparge_done = false;
     return;
   }
   if (waiting_for_start_boil) {
+    DEBUG_LOG("Advancing to start boiling\n");
     current_state_.timer_total_seconds = recipe_.boil_minutes;
     current_state_.timer_seconds_left = recipe_.boil_minutes;
     current_state_.timer_on = true;
+    DEBUG_LOG("Starting timer for boil\n");
     waiting_for_start_boil = false;
     return;
   }
   if (waiting_for_boil_done) {
+    DEBUG_LOG("Advancing to finish boil\n");
     // not much to do here, just a confirmation.
     waiting_for_boil_done = false;
   }
@@ -124,6 +152,7 @@ void SimulatedGrainfather::OnDoneHeating() {
     // now we wait for input
     current_state_.substage = 2;
     current_state_.waiting_for_input = true;
+    DEBUG_LOG("Waiting for input to start mash\n");
     waiting_for_mash_start = true;
   }
   // Heat between mash stages
@@ -132,6 +161,7 @@ void SimulatedGrainfather::OnDoneHeating() {
     current_state_.timer_total_seconds = recipe_.mash_times[ms - 1];
     current_state_.timer_seconds_left = recipe_.mash_times[ms - 1];
     current_state_.timer_on = true;
+    DEBUG_LOG("Starting timer for next mash\n");
   }
   // Heat during sparge? (steps+1) do nothing.
   // Done heating to boil:
@@ -140,6 +170,7 @@ void SimulatedGrainfather::OnDoneHeating() {
     current_state_.substage = 2;
     current_state_.waiting_for_input = true;
     waiting_for_start_boil = true;
+    DEBUG_LOG("Waiting for input to start boil\n");
     current_state_.heater_on = true;
   }
 }
@@ -156,6 +187,7 @@ void SimulatedGrainfather::OnTimerDone() {
     // switch to heating for next mash:
     current_state_.target_temp = recipe_.mash_temps[ms];
     current_state_.waiting_for_temp = true;
+    DEBUG_LOG("Heating for mash temp\n");
     current_state_.heater_on = true;
     current_state_.stage += 1;
   }
@@ -166,6 +198,7 @@ void SimulatedGrainfather::OnTimerDone() {
     current_state_.heater_on = true;
     current_state_.stage += 1;
     waiting_for_start_sparge = true;
+    DEBUG_LOG("Waiting for input to start sparge\n");
   }
   // Timing boil
   if (ms == recipe_.mash_temps.size() + 2) {
@@ -173,15 +206,16 @@ void SimulatedGrainfather::OnTimerDone() {
     Reset();
     current_state_.waiting_for_input = true;
     waiting_for_boil_done = true;
+    DEBUG_LOG("Waiting for input to finish boil\n");
   }
 }
 
-void SimulatedGrainfather::Update() {
+bool SimulatedGrainfather::Update() {
   // we heat super fast, 1 degree per second
   int64_t now = GetTimeMsec();
   int64_t seconds_past = (now - current_state_.read_time) / 1000;
   if (seconds_past < 1) {
-    return;
+    return false;
   }
   current_state_.read_time += 1000 * seconds_past;
 
@@ -209,9 +243,14 @@ void SimulatedGrainfather::Update() {
       OnTimerDone();
     }
   }
+  return true;
 }
 
 BrewState SimulatedGrainfather::ReadState() {
-  Update();
+  if(Update()) {
+    current_state_.valid = true;
+  } else {
+    current_state_.valid = false;
+  }
   return current_state_;
 }

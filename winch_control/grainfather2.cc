@@ -59,20 +59,28 @@ BrewState GrainfatherSerial::GetLatestState(int64_t prev_read) {
 //           already, or after the command
 // returns -1 for all errors
 int GrainfatherSerial::CommandAndVerify(const char *command, bool (*verify_condition)(BrewState)) {
-  if (disable_for_test_) return 0; //TODO: actually change state to simulate brew
   BrewState latest = GetLatestState();
+  // std::cout<<" CommandAndVerify: initial state: "<< latest.ToString() <<std::endl;
   if (!latest.valid) return -1;
   // Already met condition, i.e. We asked to turn pump on, but it already was on.
   if (verify_condition((latest))) return 0;
-  if (SendSerial(kPumpOnString)) {
+  if (SendSerial(command)) {
     printf("Failed to send command '%s'\n", command);
     return -1;
   }
   int64_t command_time_ms = GetTimeMsec();
   BrewState next = GetLatestState(command_time_ms);
+  // std::cout<<" CommandAndVerify: after state: "<< next.ToString() <<std::endl;
   if (!next.valid) {
     printf("Failed to get another reading from Grainfather.\n");
     return -1;
+  }
+  // next.Print();
+  // Have to have different conditions for advance...
+  if (command == kSetButtonString) {
+    if (!next.waiting_for_input || next.stage != latest.stage) {
+      return 0;
+    }
   }
   if (verify_condition(next)) {
     return 0;
@@ -128,8 +136,7 @@ int GrainfatherSerial::TestCommands() {
    const char *session_string = "R15,2,14.3,14.6,   "
    "0,1,1,0,0,         "
    "TEST CONTROLA      "
-   "0,1,0,0,           "
-   "1,                 "
+   "0,0,0,0,           "
    "5:16,              "
    "66:60,             ";
   if (LoadSession(session_string) < 0) { printf("Failed to LoadSession\n"); return -1; }
@@ -165,7 +172,7 @@ BrewState GrainfatherSerial::ParseState(char in[kStatusLength]) {
   ret.timer_seconds_left = (min_left - 1) * 60 + sec_left;
   ret.timer_total_seconds = 60 * total_min;
 
-  obj_read = sscanf(in + 17, "X%f,%f,", &ret.target_temp, &ret.current_temp);
+  obj_read = sscanf(in + 17, "X%lf,%lf,", &ret.target_temp, &ret.current_temp);
   if (obj_read != 2) {
     printf("BrewState XParsing error.\n");
     return ret;
@@ -184,7 +191,7 @@ BrewState GrainfatherSerial::ParseState(char in[kStatusLength]) {
   ret.waiting_for_input = (waitforinput == 1);
 
   unsigned timer_paused;
-  obj_read = sscanf(in + 51, "W%f,%u", &ret.percent_heating, &timer_paused);
+  obj_read = sscanf(in + 51, "W%lf,%u", &ret.percent_heating, &timer_paused);
   if (obj_read != 2) {
     printf("BrewState WParsing error.\n");
     return ret;
@@ -199,15 +206,57 @@ void GrainfatherSerial::RegisterBrewStateCallback(std::function<void(BrewState)>
   brew_state_callback_ = callback;
 }
 
-
+// callback could be a nullptr, I don't care here
 int GrainfatherSerial::Init(std::function<void(BrewState)> callback) {
   brew_state_callback_ = callback;
+  if (!disable_for_test_) {
+    int ret = Connect("/dev/ttyUSB0");
+    if (ret < 0) {
+      printf("Failed to connect to port\n");
+      return ret;
+    }
+  }
+  reading_thread_enabled_ = true;
+  reading_thread_ = std::thread(&GrainfatherSerial::ReadStatusThread, this);
+
+  BrewState bs = GetLatestState();
+  int quit_counter = 0;
+  while (!bs.valid) {
+    usleep(300000);
+    bs = GetLatestState();
+    quit_counter++;
+    if (quit_counter >= 10) {
+      reading_thread_enabled_ = false;
+      return -1;
+    }
+  }
+  return 0;
 }
 
+GrainfatherSerial::~GrainfatherSerial() {
+  reading_thread_enabled_ = false;
+  reading_thread_.join();
+}
 
 // Read status
 void GrainfatherSerial::ReadStatusThread() {
-  while (!quit_now_) {
+  while (reading_thread_enabled_) {
+    if (disable_for_test_) {
+      usleep(300000);
+      BrewState bs = simulated_grainfather_.ReadState();
+      if (bs.valid) {
+        {
+          std::lock_guard<std::mutex> lock(state_mutex_);
+          latest_state_ = bs;
+        }
+        // std::cout<<bs.ToString()<<std::endl;
+        if (brew_state_callback_) {
+          brew_state_callback_(bs);
+        }
+      }
+      continue;
+    }
+
     // Read until we get to the start bit: 'T'
     int first_byte = '\0';
     int current_read;
@@ -241,14 +290,15 @@ void GrainfatherSerial::ReadStatusThread() {
     }
     // Now we have the correct number of chars, aligned correctly.
     // See if it parses:
-    BrewState bs = ParseState(ret);
-    if (bs.valid) {
+    BrewState bs;
+    if (bs.Load(ret) == 0) {
       read_error_ = false;
+      {
       std::lock_guard<std::mutex> lock(state_mutex_);
-      previous_state_ = latest_state_;
       latest_state_ = bs;
-      if (previous_state_.valid) {
-        // signal conditional variable
+      }
+      if (brew_state_callback_) {
+        brew_state_callback_(bs);
       }
     }
   } // end while
@@ -292,6 +342,11 @@ int GrainfatherSerial::Connect(const char *path) {
 }
 
 int GrainfatherSerial::SendSerial(std::string to_send) {
+  // std::cout << to_send << std::endl;
+  if (disable_for_test_) {
+    simulated_grainfather_.ReceiveSerial(to_send.c_str());
+    return 0;
+  }
   int n_written = write(fd_ , to_send.c_str(), to_send.size());
   if (n_written != to_send.size()) {
     printf("Failed to write!\n");

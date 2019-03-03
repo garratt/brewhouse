@@ -18,8 +18,8 @@ struct BrewRecipe {
   std::vector<double> mash_temps;
   std::vector<uint32_t> mash_times;
   unsigned boil_minutes = 0;
-  double grain_weight_grams;
-  double hops_grams;
+  double grain_weight_grams = 0.0;
+  double hops_grams = 0.0;
   std::string hops_type;
   double initial_volume_liters = 0, sparge_liters = 0;
 
@@ -39,15 +39,15 @@ struct BrewRecipe {
 
 
 struct BrewState {
-  int64_t read_time;
-  bool timer_on, timer_paused;
-  uint32_t timer_seconds_left;
-  uint32_t timer_total_seconds;
-  bool waiting_for_input, waiting_for_temp;
-  bool brew_session_loaded;
-  bool heater_on, pump_on;
-  double current_temp, target_temp, percent_heating;
-  uint8_t stage, substage;
+  int64_t read_time = 0;
+  bool timer_on = false, timer_paused = false;
+  uint32_t timer_seconds_left = 0;
+  uint32_t timer_total_seconds = 0;
+  bool waiting_for_input = false, waiting_for_temp = false;
+  bool brew_session_loaded = false;
+  bool heater_on = false, pump_on = false;
+  double current_temp = 0, target_temp = 0, percent_heating = 0;
+  uint32_t stage = 0, substage = 0;
   bool valid = false;
 
   bool operator!=(const BrewState& other);
@@ -59,6 +59,7 @@ struct BrewState {
   // de-serialize the state from what would be read from the grainfather.
   int Load(std::string in);
 
+  void Print();
 };
 
 
@@ -99,3 +100,4 @@ struct FullBrewState {
 };
 
 int64_t GetTimeMsec();
+int Test_Types();

@@ -151,6 +151,7 @@ class WeightFilter {
   // Don't use both interfaces simultaneously.
   ScaleStatus GetWeight(bool verbose = false);
 
+  ~WeightFilter();
 };
 
 

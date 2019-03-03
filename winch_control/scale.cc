@@ -186,6 +186,11 @@ void WeightFilter::InitLoop(std::function<void(double)> callback) {
   reading_thread_ = std::thread(&WeightFilter::ReadingThread, this);
 }
 
+WeightFilter::~WeightFilter() {
+  reading_thread_enabled_ = false;
+  reading_thread_.join();
+}
+
 
 double WeightFilter::RemoveOutlierData() {
   excluded_.clear();

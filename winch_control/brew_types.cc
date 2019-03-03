@@ -54,12 +54,16 @@ int BrewRecipe::Load(const std::string &in) {
   std::string ret;
   char buffer[20];
   unsigned mash_steps;
-  sscanf(in.c_str(), "R%u,%u,%f,%f,", &boil_minutes,
+  sscanf(in.c_str(), "R%u,%u,%lf,%lf,", &boil_minutes,
       &mash_steps, &initial_volume_liters, &sparge_liters);
   // second line is: "0,1,1,0,0,         ";
   // Third line in name:
-  size_t pos = in.find_last_not_of(" ", 19*3); // find last non-space in name
-  session_name = in.substr(19*2, pos);
+  session_name = in.substr(19*2, 19);
+  size_t pos = session_name.find_last_not_of(" "); // find last non-space in name
+  if (pos != std::string::npos)
+    session_name.erase(pos + 1);
+  else
+    session_name.clear();            // session name is all whitespace
   // Fourth line is: "0,0,0,0,           ";  // second number is number of additions
   // we would put in addition times here, but they don't change the heating
   // fifth line, assuming no additions, is the mash steps:
@@ -67,7 +71,7 @@ int BrewRecipe::Load(const std::string &in) {
     unsigned offset = 19 * (4 + i);
     double temp;
     uint32_t mtime;
-    sscanf(in.c_str() + offset, "%f:%u,", &temp, &mtime);
+    sscanf(in.c_str() + offset, "%lf:%u,", &temp, &mtime);
     mash_temps.push_back(temp);
     mash_times.push_back(mtime);
   }
@@ -111,11 +115,13 @@ bool BrewState::operator!=(const BrewState& other) {
 std::string BrewState::ToString() {
   char ret[17*4+10];
   // Each of these strings overruns the length, but is overwritten by the next:
+  int sec_left = timer_seconds_left == 0? 0 : timer_seconds_left % 60 + 1;
+  int min_left = timer_seconds_left == 0? 0 : timer_seconds_left / 60 + 1;
+
   sprintf(ret,"T%d,%d,%d,%d,ZZZZZZZZZZ", timer_on?1:0,
-      timer_seconds_left/60 + 1, timer_total_seconds / 60,
-      timer_seconds_left % 60 + 1);
+      min_left, timer_total_seconds / 60, sec_left);
   sprintf(ret+17, "X%2.1f,%2.1f,ZZZZZZZZZZZ", target_temp, current_temp);
-  sprintf(ret+34, "Y%d,%d,%d,%d,%d,%u,%u,", heater_on?1:0, pump_on?1:0,
+  sprintf(ret+34, "Y%d,%d,%d,%d,%d,%u,%u,ZZZZZ", heater_on?1:0, pump_on?1:0,
       brew_session_loaded ? 1 : 0, waiting_for_temp ? 1 : 0,
       waiting_for_input ? 1 : 0, substage, stage);
   sprintf(ret + 51, "W%d,%u,0,1,0,1,ZZZZZZZ", (int)percent_heating,
@@ -134,10 +140,14 @@ int BrewState::Load(std::string in) {
     return -1;
   }
   timer_on = (_timer_on == 1);
-  timer_seconds_left = (min_left - 1) * 60 + sec_left;
+  timer_seconds_left = 0;
+  if (min_left > 0)
+    timer_seconds_left += (min_left - 1) * 60;
+  if (sec_left > 0)
+    timer_seconds_left += sec_left - 1;
   timer_total_seconds = 60 * total_min;
 
-  obj_read = sscanf(in.c_str() + 17, "X%f,%f,", &target_temp, &current_temp);
+  obj_read = sscanf(in.c_str() + 17, "X%lf,%lf,", &target_temp, &current_temp);
   if (obj_read != 2) {
     printf("BrewState XParsing error.\n");
     return -1;
@@ -156,7 +166,7 @@ int BrewState::Load(std::string in) {
   waiting_for_input = (waitforinput == 1);
 
   unsigned _timer_paused;
-  obj_read = sscanf(in.c_str() + 51, "W%f,%u", &percent_heating, &_timer_paused);
+  obj_read = sscanf(in.c_str() + 51, "W%lf,%u", &percent_heating, &_timer_paused);
   if (obj_read != 2) {
     printf("BrewState WParsing error.\n");
     return -1;
@@ -167,3 +177,122 @@ int BrewState::Load(std::string in) {
   return 0;
 }
 
+void BrewState::Print() {
+  std::cout << "read_time " << read_time << std::endl;
+  std::cout << "timer_on " << timer_on << std::endl;
+  std::cout << "timer_paused " << timer_paused << std::endl;
+  std::cout << "timer_seconds_left " << timer_seconds_left << std::endl;
+  std::cout << "timer_total_seconds " << timer_total_seconds << std::endl;
+  std::cout << "waiting_for_input " << waiting_for_input << std::endl;
+  std::cout << "waiting_for_temp " << waiting_for_temp << std::endl;
+  std::cout << "brew_session_loaded " << brew_session_loaded << std::endl;
+  std::cout << "heater_on " << heater_on << std::endl;
+  std::cout << "pump_on " << pump_on << std::endl;
+  std::cout << "current_temp " << current_temp << std::endl;
+  std::cout << "target_temp " << target_temp << std::endl;
+  std::cout << "percent_heating " << percent_heating << std::endl;
+  std::cout << "stage " << stage << std::endl;
+  std::cout << "substage " << substage << std::endl;
+  std::cout << "read_time " << read_time << std::endl;
+  std::cout << "valid " << valid << std::endl;
+}
+
+int VerifyBrewstate(BrewState bs) {
+  BrewState bs1;
+  bs1.Load(bs.ToString());
+  if (bs1 != bs) {
+    std::cout << "Failed to verify state: " << bs.ToString() << "  " << bs1.ToString() << std::endl;
+    bs.Print();
+    bs1.Print();
+    return -1;
+  }
+  return 0;
+}
+
+int VerifyBrewRecipe(BrewRecipe br) {
+  BrewRecipe br1;
+  br1.Load(br.GetSessionCommand());
+  if (br1 == br) {
+    return 0;
+  }
+  std::string brs = br.GetSessionCommand();
+  std::string brs1 = br1.GetSessionCommand();
+  // Format the command strings so they can be read:
+  for (int i = 18; i < brs.size(); i+=19) {
+    brs[i] = '\n';
+    brs1[i] = '\n';
+  }
+
+  std::cout << "Failed to verify state: br:\n" << brs << std::endl;
+  std::cout << " br1:\n" << brs1 << std::endl;
+  br.Print();
+  br1.Print();
+  return -1;
+}
+
+int Test_Types() {
+  BrewState bs;
+  bs.valid = true;
+  if (VerifyBrewstate(bs)) return -1;
+  bs.timer_on = true;
+  if (VerifyBrewstate(bs)) { std::cout << "timer_on" << std::endl; return -1; }
+  bs.timer_paused = true;
+  if (VerifyBrewstate(bs)) { std::cout << "timer_paused" << std::endl; return -1; }
+  bs.timer_seconds_left = 115;
+  if (VerifyBrewstate(bs)) { std::cout << "timer_seconds_left" << std::endl; return -1; }
+  bs.timer_total_seconds = 120;
+  if (VerifyBrewstate(bs)) { std::cout << "timer_total_seconds" << std::endl; return -1; }
+  bs.waiting_for_input = true;
+  if (VerifyBrewstate(bs)) { std::cout << "waiting_for_input" << std::endl; return -1; }
+  bs.waiting_for_temp = true;
+  if (VerifyBrewstate(bs)) { std::cout << "waiting_for_temp" << std::endl; return -1; }
+  bs.brew_session_loaded = true;
+  if (VerifyBrewstate(bs)) { std::cout << "brew_session_loaded" << std::endl; return -1; }
+  bs.heater_on = true;
+  if (VerifyBrewstate(bs)) { std::cout << "heater_on" << std::endl; return -1; }
+  bs.pump_on = true;
+  if (VerifyBrewstate(bs)) { std::cout << "pump_on" << std::endl; return -1; }
+  bs.target_temp = 65.3;
+  if (VerifyBrewstate(bs)) { std::cout << "target_temp" << std::endl; return -1; }
+  bs.current_temp = 32.5;
+  if (VerifyBrewstate(bs)) { std::cout << "current_temp" << std::endl; return -1; }
+  bs.percent_heating = 20;
+  if (VerifyBrewstate(bs)) { std::cout << "percent_heating" << std::endl; return -1; }
+  bs.stage = 3;
+  if (VerifyBrewstate(bs)) { std::cout << "stage" << std::endl; return -1; }
+  bs.substage = 2;
+  if (VerifyBrewstate(bs)) { std::cout << "substage" << std::endl; return -1; }
+  bs.read_time = 22;
+  if (VerifyBrewstate(bs)) { std::cout << "read_time" << std::endl; return -1; }
+  bs.valid = true;
+  if (VerifyBrewstate(bs)) { std::cout << "valid" << std::endl; return -1; }
+
+  // Brew Recipe:
+  BrewRecipe br;
+  if (VerifyBrewRecipe(br)) return -1;
+  br.boil_minutes = 5;
+  if (VerifyBrewRecipe(br)) { std::cout << "boil_minutes" << std::endl; return -1; }
+  br.grain_weight_grams = 15.3;
+  if (VerifyBrewRecipe(br)) { std::cout << "grain_weight_grams" << std::endl; return -1; }
+  br.hops_grams = 25.6;
+  if (VerifyBrewRecipe(br)) { std::cout << "hops_grams" << std::endl; return -1; }
+  br.initial_volume_liters = 5.4;
+  if (VerifyBrewRecipe(br)) { std::cout << "initial_volume_liters" << std::endl; return -1; }
+  br.sparge_liters = 5.2;
+  if (VerifyBrewRecipe(br)) { std::cout << "sparge_liters" << std::endl; return -1; }
+  br.session_name = "mytest brew";
+  if (VerifyBrewRecipe(br)) { std::cout << "session_name" << std::endl; return -1; }
+  br.hops_type = "hoppy mchopface";
+  if (VerifyBrewRecipe(br)) { std::cout << "hops_style" << std::endl; return -1; }
+  br.mash_temps.push_back(30.2);
+  br.mash_times.push_back(22);
+  if (VerifyBrewRecipe(br)) { std::cout << "mash step 1" << std::endl; return -1; }
+  br.mash_temps.push_back(46.2);
+  br.mash_times.push_back(25);
+  if (VerifyBrewRecipe(br)) { std::cout << "mash step 2" << std::endl; return -1; }
+  br.mash_temps.push_back(80.6);
+  br.mash_times.push_back(52);
+  if (VerifyBrewRecipe(br)) { std::cout << "mash step 3" << std::endl; return -1; }
+
+  return 0;
+}

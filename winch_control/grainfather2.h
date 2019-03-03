@@ -25,9 +25,10 @@ class GrainfatherSerial {
   static constexpr const char *kResumeTimerString = "G                  ";
   static constexpr char kStartChar = 'T';
   static constexpr unsigned kStatusLength = 4 * 17;
+  bool reading_thread_enabled_ = false;
+  std::thread reading_thread_;
   std::function<void(BrewState)> brew_state_callback_;
   std::mutex state_mutex_;
-  bool quit_now_ = false;
   bool read_error_ = false;
   int fd_;
   bool disable_for_test_ = false;
@@ -61,6 +62,9 @@ class GrainfatherSerial {
 
   int LoadSession(const char *session_string);
 
+  int WaitForValid();
+
+
   // Register a callback to be called when a new brewstate is read:
   void RegisterBrewStateCallback(std::function<void(BrewState)> callback);
 
@@ -75,6 +79,7 @@ class GrainfatherSerial {
   void ReadStatusThread();
 
   void DisableForTest() { disable_for_test_ = true; }
+  ~GrainfatherSerial();
 };
 
 

@@ -25,11 +25,11 @@ class SimulatedGrainfather {
   void Advance();
   void OnDoneHeating();
   void OnTimerDone();
-  void Update();
+  bool Update();
   void LoadSession(BrewRecipe recipe);
 
   public:
-
+  SimulatedGrainfather() { Reset();}
   void ReceiveSerial(const char *serial_in);
 
   BrewState ReadState();
