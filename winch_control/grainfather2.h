@@ -5,45 +5,11 @@
 #pragma once
 
 #include "gpio.h"
+#include "brew_types.h"
+#include "SimulatedGrainfather.h"
 #include <utility>
 #include <mutex>
 #include <functional>
-
-int64_t GetTimeMsec();
-
-
-struct BrewState {
-  int64_t read_time;
-  bool timer_on, timer_paused;
-  uint32_t timer_seconds_left;
-  uint32_t timer_total_seconds;
-  bool waiting_for_input, waiting_for_temp;
-  bool brew_session_loaded;
-  bool heater_on, pump_on;
-  double current_temp, target_temp, percent_heating;
-  uint8_t stage, substage;
-  bool valid = false;
-
-  bool operator!=(const BrewState& other) {
-    if (timer_on != other.timer_on) return true;
-    if (timer_paused != other.timer_paused) return true;
-    if (timer_seconds_left != other.timer_seconds_left) return true;
-    if (timer_total_seconds != other.timer_total_seconds) return true;
-    if (waiting_for_input != other.waiting_for_input) return true;
-    if (waiting_for_temp != other.waiting_for_temp) return true;
-    if (brew_session_loaded != other.brew_session_loaded) return true;
-    if (heater_on != other.heater_on) return true;
-    if (pump_on != other.pump_on) return true;
-    if (current_temp != other.current_temp) return true;
-    if (target_temp != other.target_temp) return true;
-    if (percent_heating != other.percent_heating) return true;
-    if (stage != other.stage) return true;
-    if (substage != other.substage) return true;
-    if (valid != other.valid) return true;
-    return false;
-  }
-
-};
 
 
 class GrainfatherSerial {
@@ -65,6 +31,7 @@ class GrainfatherSerial {
   bool read_error_ = false;
   int fd_;
   bool disable_for_test_ = false;
+  SimulatedGrainfather simulated_grainfather_;
 
   int Connect(const char *path);
   int SendSerial(std::string to_send);

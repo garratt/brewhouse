@@ -6,25 +6,10 @@
 #include <deque>
 #include <vector>
 #include <mutex>
+#include "brew_types.h"
 
 #pragma once
 
-struct BrewRecipe {
-  std::string session_name;
-  std::vector<double> mash_temps;
-  std::vector<uint32_t> mash_times;
-  unsigned boil_minutes = 0;
-  double grain_weight_grams;
-  double hops_grams;
-  std::string hops_type;
-  double initial_volume_liters = 0, sparge_liters = 0;
-
-  void Print();
-
-  // This creates the string which is passed to the Grainfather to
-  // Load a session
-  std::string GetSessionCommand();
-};
 
 namespace oauth {
 class OathAccess;

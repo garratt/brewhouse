@@ -371,39 +371,6 @@ class OathAccess {
 
 }  // namespace oauth
 
-void BrewRecipe::Print() {
-  std::cout << " brew session: " << session_name << std::endl;
-  std::cout << " boil time: " << boil_minutes << std::endl;
-  std::cout << " Grain Weight: " << grain_weight_grams << std::endl;
-  std::cout << " Initial Water: " << initial_volume_liters << std::endl;
-  std::cout << " Sparge Volume: " << sparge_liters << std::endl;
-  std::cout << " mash steps:: " << std::endl;
-  for (unsigned i = 0; i < mash_temps.size(); ++i) {
-    printf("  %2.2f C, %d minutes\n", mash_temps[i], mash_times[i]);
-  }
-}
-
-// This creates the string which is passed to the Grainfather to
-// Load a session
-std::string BrewRecipe::GetSessionCommand() {
-  std::string ret;
-  char buffer[20];
-  snprintf(buffer, 20, "R%u,%u,%2.1f,%2.1f,                  ", boil_minutes,
-           mash_temps.size(), initial_volume_liters, sparge_liters);
-  ret += buffer;
-  // convert name string to all caps
-  snprintf(buffer, 20, "%s                           ", session_name.c_str());
-  ret += buffer;
-  ret += "0,1,1,0,0,         ";
-  ret += "0,0,0,0,           ";  // second number is number of additions
-  // we would put in addition times here, but they don't change the heating
-  for (unsigned i = 0; i < mash_temps.size(); ++i) {
-    snprintf(buffer, 20, "%2.1f:%u,                      ", mash_temps[i],
-             mash_times[i]);
-    ret += buffer;
-  }
-  return ret;
-}
 
 bool BrewLogger::PopMessage(LogMessage *current_message) {
   std::lock_guard<std::mutex> lock(message_lock_);

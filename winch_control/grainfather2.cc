@@ -14,13 +14,7 @@
 #include <termios.h>    // POSIX terminal control definitions
 #include <iostream>
 #include <mutex>
-#include <sys/time.h>   // gettimeofday
 
-int64_t GetTimeMsec() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
 
 
 // Gets the latest state.  If |prev_read| == 0,
@@ -150,6 +144,14 @@ int GrainfatherSerial::TestCommands() {
   return 0;
 }
 
+// Brew State:
+// T<timer_on>,<min_left+1>,<total_min>,<sec_left>
+// X<target_temp>,<current_temp>,
+// Y<heater_on>,<pump_on>,<brew_session_loaded>,<waiting_for_temp>,<waitingforinput>,<substage>,<stage>,0,
+// W<percent_heating>,<timer_paused>,0,1,0,1,
+
+
+
 BrewState GrainfatherSerial::ParseState(char in[kStatusLength]) {
   //T1,1,2,60,ZZZZZZZX19.0,19.1,ZZZZZZY1,1,1,0,0,0,1,0,W0,0,0,1,0,1,ZZZZ
   BrewState ret;
@@ -200,7 +202,6 @@ void GrainfatherSerial::RegisterBrewStateCallback(std::function<void(BrewState)>
 
 int GrainfatherSerial::Init(std::function<void(BrewState)> callback) {
   brew_state_callback_ = callback;
-
 }
 
 

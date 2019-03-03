@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "brew_types.h"
 #include "gpio.h"
 #include "grainfather2.h"
 #include "user_interface.h"
@@ -19,45 +20,6 @@
 #include <list>
 #include <functional>
 
-
-#define BREW_WARNING -1
-#define BREW_ERROR -2
-#define BREW_FATAL -3
-
-
-struct Weights {
-  uint32_t initial_rig, initial_with_water, initial_with_grain;
-  uint32_t after_mash, after_lift, after_drain, after_boil;
-  uint32_t after_decant;
-  void RecordInitWater(uint32_t in) { initial_with_water = in; latest = in; }
-  void RecordInitRig(uint32_t in)     { initial_rig = in; latest = in; }
-  void RecordInitGrain(uint32_t in)   { initial_with_grain = in; latest = in; }
-  void RecordAfterMash(uint32_t in)   { after_mash = in; latest = in; }
-  void RecordAfterDrain(uint32_t in)  { after_drain = in; latest = in; }
-  void RecordAfterLift(uint32_t in)   { after_lift = in; latest = in; }
-  void RecordAfterBoil(uint32_t in)   { after_boil = in; latest = in; }
-  void RecordAfterDecant(uint32_t in) { after_decant = in; latest = in; }
-  uint32_t latest;
-};
-
-struct Times {
-  int64_t brew_start_time = 0, mash_start_time = 0;
-  int64_t mash_end_time = 0, boil_start_time = 0;
-  void RecordBrewStart(int64_t t) { brew_start_time = t; }
-  void RecordMashStart(int64_t t) { mash_start_time = t; }
-  void RecordMashEnd(int64_t t)   { mash_end_time = t; }
-  void RecordBoilStart(int64_t t) { boil_start_time = t; }
-};
-
-enum BrewStage { PREMASH, MASHING, DRAINING, BOILING, CHILLING, DECANTING, DONE, CANCELLED};
-
-struct FullBrewState {
- uint32_t weight;
- BrewStage current_stage = PREMASH;
- BrewState state;
- Weights weights;
- Times times;
-};
 
 class BrewSession {
 // session info, shouldn't change:
