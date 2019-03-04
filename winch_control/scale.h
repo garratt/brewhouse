@@ -9,6 +9,7 @@
 #include <thread>
 #include <functional>
 #include "gpio.h"
+#include "brew_types.h"
 
 static constexpr int kHX711ResponseLength = 25;
 
@@ -29,33 +30,8 @@ struct WeightLimiter {
   static constexpr int kMaxTimeJumpSeconds = 60;
   // This is the rate at which we log, even if the weight is constant
   static constexpr int kLoggingPeriodSeconds = 300; // 5 minutes
-  
-  bool PublishWeight(double weight_in, double *weight_out, time_t *log_time) {
-    // If it is the first weight, publish it and save it.
-    time_t now = time(NULL);
-    if (count_ == 0) {
-      last_log_ = now;
-      count_ = 1;
-      sum_ = weight_in;
-    }
-    double average = sum_ / count_;
-    double dev = average > weight_in ? average - weight_in : weight_in - average;
-    if (dev > kMaxDeviationGrams || difftime(now, last_log_) > kMaxTimeJumpSeconds
-        || difftime(now, first_log_) > kLoggingPeriodSeconds) {
-      // We always report the previous readings, and leave our current reading
-      *weight_out = average;
-      *log_time = last_log_;
-      last_log_ = now;
-      first_log_ = now;
-      count_ = 1;
-      sum_ = weight_in;
-      return true;
-    }
-    // Otherwise, just record the reading
-    count_++;
-    sum_ += weight_in;
-    return false;
-  }
+
+  bool PublishWeight(double weight_in, double *weight_out, time_t *log_time);
 
   double GetWeight() { return count_ ? sum_ / count_ : 0; }
 };
@@ -67,6 +43,32 @@ struct ScaleStatus {
    unsigned state = 0;
    double weight = 0;
 };
+
+class FakeScale {
+  double current_weight_ = 12000;
+  double dgrams_per_sec_ = 12000;
+  int64_t last_time_;
+
+public:
+  ScaleStatus GetWeight();
+  ScaleStatus CheckWeight();
+
+  void Update() {
+    int tdiff, tnow = GetTimeMsec();
+    if (last_time_ == 0) {
+      last_time_ = tnow;
+      return;
+    }
+    tdiff = tnow - last_time_;
+    current_weight_ += (tdiff * dgrams_per_sec_) / 1000;
+  }
+
+  void DrainOut() { dgrams_per_sec_ = -50; }
+  void Evaporate() { dgrams_per_sec_ = -.5; }
+  void Stabalize() { dgrams_per_sec_ = 0; }
+};
+
+
 
 class WeightFilter {
   double offset_ = 0, scale_ = 0;
@@ -82,7 +84,8 @@ class WeightFilter {
   std::vector<double> sigma_;
   std::vector<bool> excluded_;
   time_t last_data_ = 0;
-
+  bool disable_for_test_ = false;
+  FakeScale fake_scale_;
 
   bool reading_thread_enabled_ = false;
   std::thread reading_thread_;
@@ -96,8 +99,8 @@ class WeightFilter {
   int FindMaxSigma();
 
   void ReadingThread();
-  
-  // Removes all data points with the largest sigma until the 
+
+  // Removes all data points with the largest sigma until the
   // std deviation falls below a certain threshold.
   // returns the average of the data.
   // TODO: incorporate slope...
@@ -110,7 +113,7 @@ class WeightFilter {
   ScaleStatus CheckWeight();
 
   public:
-  void DisableForTest(); // TODO
+  void DisableForTest() { disable_for_test_ = true; }
 
   int CheckScale();
 
@@ -145,7 +148,7 @@ class WeightFilter {
   // 3) Apply scale and offset from calibration
 
   // Take a number of readings, average.
-  // Way to take independant, self contained reading.  This call blocks (for up to 
+  // Way to take independant, self contained reading.  This call blocks (for up to
   // 3 seconds) until reading is done.
   // This call will also interfere with an ongoing reading using CheckWeight.
   // Don't use both interfaces simultaneously.

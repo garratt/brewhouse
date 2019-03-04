@@ -73,13 +73,45 @@ double ReadHX711Data(uint8_t data_pin, uint8_t sclk) {
       // return -1;
     // }
     ret = ret << 1;
-    ret += rval; 
+    ret += rval;
     // ret += (buffer == '1');
   }
   close(sclk_fd);
   // close(data_pin_fd);
   return ret;
 }
+
+
+
+
+bool WeightLimiter::PublishWeight(double weight_in, double *weight_out, time_t *log_time) {
+  // If it is the first weight, publish it and save it.
+  time_t now = time(NULL);
+  if (count_ == 0) {
+    last_log_ = now;
+    count_ = 1;
+    sum_ = weight_in;
+  }
+  double average = sum_ / count_;
+  double dev = average > weight_in ? average - weight_in : weight_in - average;
+  if (dev > kMaxDeviationGrams || difftime(now, last_log_) > kMaxTimeJumpSeconds
+      || difftime(now, first_log_) > kLoggingPeriodSeconds) {
+    // We always report the previous readings, and leave our current reading
+    *weight_out = average;
+    *log_time = last_log_;
+    last_log_ = now;
+    first_log_ = now;
+    count_ = 1;
+    sum_ = weight_in;
+    return true;
+  }
+  // Otherwise, just record the reading
+  count_++;
+  sum_ += weight_in;
+  return false;
+}
+
+
 
 int WeightFilter::CollectRawData(int num_readings) {
   raw_data_.clear();
@@ -268,6 +300,15 @@ int WeightFilter::Calibrate(double calibration_mass) {
   return 0;
 }
 
+ScaleStatus FakeScale::GetWeight() {
+  usleep(2000000);
+  Update();
+  ScaleStatus status;
+  status.state = ScaleStatus::READY;
+  status.weight = current_weight_;
+  return status;
+}
+
 // Take in a raw data reading and return a filtered value
 // 1) Filter erroneous readings
 //    If the time between readings is short and the reading is wildly different,
@@ -279,6 +320,9 @@ int WeightFilter::Calibrate(double calibration_mass) {
 
 // Take a number of readings, average.
 ScaleStatus WeightFilter::GetWeight(bool verbose) {
+  if (disable_for_test_) {
+    return fake_scale_.GetWeight();
+  }
   ScaleStatus status;
   verbose_ = verbose;
   if(CollectRawData(kNumberOfReadings)) {
@@ -293,10 +337,27 @@ ScaleStatus WeightFilter::GetWeight(bool verbose) {
   return status;
 }
 
+ScaleStatus FakeScale::CheckWeight() {
+  ScaleStatus status;
+  int64_t tnow = GetTimeMsec();
+  if (tnow - last_time_ < 2000) {
+    status.state = ScaleStatus::NONE;
+    return status;
+  }
+  Update();
+  status.state = ScaleStatus::READY;
+  status.weight = current_weight_;
+  return status;
+}
+
+
 // Checks if new weight is available.  If it is, the weight is
 // read out (takes about 1 ms).  If there are enough readings, the
 // readings are filtered and a weight is produced.
 ScaleStatus WeightFilter::CheckWeight() {
+  if (disable_for_test_) {
+    return fake_scale_.CheckWeight();
+  }
   ScaleStatus status;
   int val = ReadInput(SCALE_DATA);
   if (val < 0) {
