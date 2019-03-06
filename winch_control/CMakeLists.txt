@@ -25,6 +25,9 @@ TARGET_LINK_LIBRARIES(brew_session_test brewhub twitcurl curl pthread)
 add_executable(grainfather_test grainfather_test.cc)
 TARGET_LINK_LIBRARIES(grainfather_test brewhub pthread)
 
+add_executable(scale_test scale_test.cc)
+TARGET_LINK_LIBRARIES(scale_test brewhub)
+
 add_executable(serial_test serial_test.cc)
 
 # set(wxWidgets_CONFIGURATION mswu)
