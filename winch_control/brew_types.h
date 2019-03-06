@@ -23,17 +23,17 @@ struct BrewRecipe {
   std::string hops_type;
   double initial_volume_liters = 0, sparge_liters = 0;
 
-  void Print();
+  void Print() const;
 
   // This creates the string which is passed to the Grainfather to
   // Load a session
-  std::string GetSessionCommand();
+  std::string GetSessionCommand() const;
 
   // Load from a serialized session command
   int Load(const std::string &in);
 
   // just check the stuff that gets loaded
-  bool operator==(const BrewRecipe &other);
+  bool operator==(const BrewRecipe &other) const;
 
 };
 
@@ -50,16 +50,16 @@ struct BrewState {
   uint32_t stage = 0, substage = 0;
   bool valid = false;
 
-  bool operator!=(const BrewState& other);
+  bool operator!=(const BrewState& other) const;
 
   // Serialize to string what would get sent from the grainfather
   // For testing and faking purposes
-  std::string ToString();
+  std::string ToString() const;
 
   // de-serialize the state from what would be read from the grainfather.
   int Load(std::string in);
 
-  void Print();
+  void Print() const;
 };
 
 
@@ -92,7 +92,7 @@ enum BrewStage { PREMASH, MASHING, DRAINING, BOILING, CHILLING, DECANTING, DONE,
 
 // The entire state vector of what is happening in the brew.
 struct FullBrewState {
- uint32_t weight;
+ uint32_t weight = 0;
  BrewStage current_stage = PREMASH;
  BrewState state;
  Weights weights;

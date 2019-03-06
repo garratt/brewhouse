@@ -46,21 +46,22 @@ struct ScaleStatus {
 
 class FakeScale {
   double current_weight_ = 12000;
-  double dgrams_per_sec_ = 12000;
-  int64_t last_time_;
+  double dgrams_per_sec_ = 0;
+  int64_t last_time_ = 0;
 
 public:
   ScaleStatus GetWeight();
   ScaleStatus CheckWeight();
 
   void Update() {
-    int tdiff, tnow = GetTimeMsec();
+    int64_t tdiff, tnow = GetTimeMsec();
     if (last_time_ == 0) {
       last_time_ = tnow;
       return;
     }
     tdiff = tnow - last_time_;
     current_weight_ += (tdiff * dgrams_per_sec_) / 1000;
+    last_time_ = tnow;
   }
 
   void DrainOut() { dgrams_per_sec_ = -50; }
@@ -137,6 +138,12 @@ class WeightFilter {
   // calibration_mass == something non-zero.
   int Calibrate(double calibration_mass);
 
+  // Set the weight expectation, so the scale can give alarms if the weight change
+  // is unexpected
+  // Als, allows the simulated scale to react properly
+  void ExpectStable() { fake_scale_.Stabalize(); }
+  void ExpectDecant() { fake_scale_.DrainOut(); }
+  void ExpectEvaporation() {fake_scale_.Evaporate(); }
 
   // Take in a raw data reading and return a filtered value
   // 1) Filter erroneous readings

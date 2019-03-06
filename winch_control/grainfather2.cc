@@ -78,7 +78,7 @@ int GrainfatherSerial::CommandAndVerify(const char *command, bool (*verify_condi
   // next.Print();
   // Have to have different conditions for advance...
   if (command == kSetButtonString) {
-    if (!next.waiting_for_input || next.stage != latest.stage) {
+    if (!next.waiting_for_input  || next.substage != latest.substage || next.stage != latest.stage ) {
       return 0;
     }
   }
@@ -91,35 +91,44 @@ int GrainfatherSerial::CommandAndVerify(const char *command, bool (*verify_condi
 }
 
 int GrainfatherSerial::TurnPumpOn() {
+  std::cout << "Sending Command to turn pump on" << std::endl;
   return CommandAndVerify(kPumpOnString, [](BrewState bs) {return bs.pump_on; });
 }
 int GrainfatherSerial::TurnPumpOff() {
+  std::cout << "Sending Command to turn pump off" << std::endl;
   return CommandAndVerify(kPumpOffString, [](BrewState bs) {return !bs.pump_on; });
 }
 int GrainfatherSerial::TurnHeatOn() {
+  std::cout << "Sending Command to turn heat on" << std::endl;
   return CommandAndVerify(kHeatOnString, [](BrewState bs) {return bs.heater_on; });
 }
 int GrainfatherSerial::TurnHeatOff() {
+  std::cout << "Sending Command to turn heat off" << std::endl;
   return CommandAndVerify(kHeatOffString, [](BrewState bs) {return !bs.heater_on; });
 }
 int GrainfatherSerial::QuitSession() {
+  std::cout << "Sending Command to quit session" << std::endl;
   return CommandAndVerify(kQuitSessionString,
       [](BrewState bs) {return !bs.brew_session_loaded; });
 }
 int GrainfatherSerial::AdvanceStage() {
+  std::cout << "Sending Command to advance stage" << std::endl;
   return CommandAndVerify(kSetButtonString,
       [](BrewState bs) {return !bs.waiting_for_input; });
 }
 int GrainfatherSerial::PauseTimer() {
+  std::cout << "Sending Command to pause timer" << std::endl;
   return CommandAndVerify(kPauseTimerString,
       [](BrewState bs) {return !bs.timer_on || bs.timer_paused; });
 }
 int GrainfatherSerial::ResumeTimer() {
+  std::cout << "Sending Command to resume timer" << std::endl;
   return CommandAndVerify(kResumeTimerString,
       [](BrewState bs) {return !bs.timer_on || !bs.timer_paused; });
 }
 
 int GrainfatherSerial::LoadSession(const char *session_string) {
+  std::cout << "Sending Command to load session" << std::endl;
   int ret = QuitSession(); // make sure there is no current session
   if (ret) return ret;
   return CommandAndVerify(session_string,
@@ -127,6 +136,7 @@ int GrainfatherSerial::LoadSession(const char *session_string) {
 }
 
 int GrainfatherSerial::TestCommands() {
+  std::cout << "++++++++++++  Running Test Commands ++++++++++++++" << std::endl;
   // SetFlow(NO_PATH);
   if (TurnHeatOn() < 0) { printf("Failed to TurnHeatOn\n"); return -1; }
   if (TurnHeatOff() < 0) { printf("Failed to TurnHeatOff\n"); return -1; }
@@ -148,6 +158,7 @@ int GrainfatherSerial::TestCommands() {
   if (PauseTimer() < 0) { printf("Failed to PauseTimer\n"); return -1; }
   if (ResumeTimer() < 0) { printf("Failed to ResumeTimer\n"); return -1; }
   if (QuitSession() < 0) { printf("Failed to QuitSession\n"); return -1; }
+  std::cout << "+++++++++ Done Running Test Commands ++++++++++++++" << std::endl;
   return 0;
 }
 
@@ -235,7 +246,9 @@ int GrainfatherSerial::Init(std::function<void(BrewState)> callback) {
 
 GrainfatherSerial::~GrainfatherSerial() {
   reading_thread_enabled_ = false;
-  reading_thread_.join();
+  if (reading_thread_.joinable()) {
+    reading_thread_.join();
+  }
 }
 
 // Read status
@@ -274,7 +287,7 @@ void GrainfatherSerial::ReadStatusThread() {
     }
     char ret[kStatusLength];
     ret[0] = kStartChar;
-    int chars_read = 1;
+    unsigned chars_read = 1;
     do {
       current_read = read(fd_, ret + chars_read, kStatusLength - chars_read);
       if (current_read < 0) {
@@ -347,7 +360,7 @@ int GrainfatherSerial::SendSerial(std::string to_send) {
     simulated_grainfather_.ReceiveSerial(to_send.c_str());
     return 0;
   }
-  int n_written = write(fd_ , to_send.c_str(), to_send.size());
+  unsigned n_written = write(fd_ , to_send.c_str(), to_send.size());
   if (n_written != to_send.size()) {
     printf("Failed to write!\n");
     return -1;

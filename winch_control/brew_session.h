@@ -41,20 +41,18 @@ class BrewSession {
   bool grainfather_disabled_ = false;
   bool winch_disabled_ = false;
   bool scale_disabled_ = false;
-  bool zippy_time_ = false;
-
-  void SetOfflineTest() { brew_logger_.DisableForTest();  logger_disabled_ = true; }
-  void SetFakeGrainFather() {grainfather_serial_.DisableForTest();  grainfather_disabled_ = true; }
-  void SetFakeWinch() { winch_controller_.Disable(); winch_disabled_ = true; }
-  void SetFakeScale() { scale_.DisableForTest(); scale_disabled_ = true; }
-  void SetZippyTime() { zippy_time_ = true; }
+  // Makes all waits 30 times faster -> 5 minutes becomes 10 seconds
+  // bool zippy_time_ = false;
+  uint32_t zippy_time_divider_ = 1;
+  bool user_interface_bypassed_ = false;
 
   void RunForReal() {
     assert(logger_disabled_ == false);
     assert(winch_disabled_ == false);
     assert(scale_disabled_ == false);
     assert(grainfather_disabled_ == false);
-    assert(zippy_time_ == false);
+    assert(zippy_time_divider_ == 1);
+    assert(user_interface_bypassed_ == false);
   }
 
   struct StateTransition {
@@ -86,16 +84,17 @@ class BrewSession {
   void RecordNewState(FullBrewState new_state, FullBrewState prev_state);
 
 
-  int LoadTriggers();
+  void LoadTriggers();
   void AddTimeTrigger(int64_t trigger_time, TriggerFunc trigger_func);
   bool enable_trigger_thread_ = false;
   bool global_pause_ = false;
-  static constexpr int64_t kMaxTimeBetweenEvents = 1000; // 1 second
+  static constexpr int64_t kMaxTimeBetweenEvents = 2000; // 1 second
 
   void CheckTriggerThread();
   std::thread check_trigger_thread_;
 
   public:
+  BrewSession() : scale_("calibration.txt") {}
 
   // Starts entire brewing session
   void StartSession(const char *spreadsheet_id);
@@ -105,9 +104,17 @@ class BrewSession {
   // Shut everything down because of error.
   void QuitSession();
 
-  int OnChangeState(const FullBrewState &new_state, const FullBrewState &old_state);
+  void OnChangeState(const FullBrewState &new_state, const FullBrewState &old_state);
+
+  void SetOfflineTest() { brew_logger_.DisableForTest();  logger_disabled_ = true; }
+  void SetFakeGrainFather() {grainfather_serial_.DisableForTest();  grainfather_disabled_ = true; }
+  void SetFakeWinch() { winch_controller_.Disable(); winch_disabled_ = true; }
+  void SetFakeScale() { scale_.DisableForTest(); scale_disabled_ = true; }
+  void SetZippyTime() { zippy_time_divider_ = 30; }
+  void BypassUserInterface() { user_interface_.DisableForTest(); user_interface_bypassed_ = true; }
 
 
+  ~BrewSession();
   // Mashing
   // bool IsMashTemp(const FullBrewState &new_state, const FullBrewState &prev_state);
   // int OnMashTemp(const FullBrewState &current_state);

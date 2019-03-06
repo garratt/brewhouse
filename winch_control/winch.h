@@ -48,22 +48,22 @@ public:
 inline int LeftGoUp(uint32_t ms) {
   if (!enabled) return 0;
   left_position-=ms;
-  raw_winch::LeftGoUp(ms);
+  return raw_winch::LeftGoUp(ms);
 }
 inline int LeftGoDown(uint32_t ms) {
   if (!enabled) return 0;
   left_position+=ms;
-  raw_winch::LeftGoDown(ms);
+  return raw_winch::LeftGoDown(ms);
 }
 inline int RightGoUp(uint32_t ms) {
   if (!enabled) return 0;
   right_position-=ms;
-  raw_winch::RightGoUp(ms);
+  return raw_winch::RightGoUp(ms);
 }
 inline int RightGoDown(uint32_t ms) {
   if (!enabled) return 0;
   right_position+=ms;
-  raw_winch::RightGoDown(ms);
+  return raw_winch::RightGoDown(ms);
 }
 inline int GoLeft(uint32_t ms) {
   if (!enabled) return 0;

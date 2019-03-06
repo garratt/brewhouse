@@ -7,7 +7,6 @@
 
 
 int WaitForHX711(uint8_t data_pin, uint8_t sclk) {
-  uint32_t ret = 0;
   // The HX711 communicates by pulling the data line low every N Hz.
   // Wait for the Data line to be pulled low:
   int valid_count = 0;
@@ -204,7 +203,7 @@ int WeightFilter::CheckScale() {
    }
    if (status.weight < kMinNormalReadingGrams ||
        status.weight > kMaxNormalReadingGrams) {
-     printf("Scale is reading %f, which is out of normal range!\n");
+     printf("Scale is reading %f, which is out of normal range!\n", status.weight);
      return -1;
    }
    // Okay, scale passes all the checks. Start the loop!
@@ -220,7 +219,8 @@ void WeightFilter::InitLoop(std::function<void(double)> callback) {
 
 WeightFilter::~WeightFilter() {
   reading_thread_enabled_ = false;
-  reading_thread_.join();
+  if (reading_thread_.joinable())
+    reading_thread_.join();
 }
 
 
@@ -403,7 +403,7 @@ ScaleStatus WeightFilter::CheckWeight() {
 void WeightFilter::ReadingThread() {
   while (reading_thread_enabled_) {
     ScaleStatus status = CheckWeight();
-    if (status.state == ScaleStatus::READY && weight_callback_) {
+    if ((status.state == ScaleStatus::READY) && weight_callback_) {
       weight_callback_(status.weight);
     } else {
       usleep(10000); // Check every 10ms

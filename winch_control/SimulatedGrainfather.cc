@@ -68,7 +68,7 @@ void SimulatedGrainfather::Reset() {
   current_state_.brew_session_loaded = false;
   current_state_.heater_on = false;
   current_state_.pump_on = false;
-  current_state_.current_temp = 10.0;
+  current_state_.current_temp = 40.0;
   current_state_.target_temp = 60.0;
   current_state_.percent_heating = 0;
   current_state_.stage = 0;
@@ -115,6 +115,7 @@ void SimulatedGrainfather::Advance() {
     DEBUG_LOG("Waiting for input to finish sparge\n");
     waiting_for_sparge_done = true;
     waiting_for_start_sparge = false;
+    current_state_.substage++;   // TODO: verify that it incriments here...
     return;
   }
   if (waiting_for_sparge_done) {
@@ -140,13 +141,14 @@ void SimulatedGrainfather::Advance() {
     DEBUG_LOG("Advancing to finish boil\n");
     // not much to do here, just a confirmation.
     waiting_for_boil_done = false;
+    Reset();
   }
 }
 
 void SimulatedGrainfather::OnDoneHeating() {
   current_state_.waiting_for_temp = false;
   // Times we heat:
-  int ms = current_state_.stage;
+  unsigned ms = current_state_.stage;
   // Heat for initial mash
   if (ms == 1) {
     // now we wait for input
@@ -180,7 +182,7 @@ void SimulatedGrainfather::OnTimerDone() {
   current_state_.timer_total_seconds = 0;
   current_state_.timer_seconds_left = 0;
   // Advance stage:
-  int ms = current_state_.stage;
+  unsigned ms = current_state_.stage;
   // Timing Mash stage
   // Still have more stages:
   if (ms > 0 && ms < recipe_.mash_temps.size()) {
@@ -203,7 +205,8 @@ void SimulatedGrainfather::OnTimerDone() {
   // Timing boil
   if (ms == recipe_.mash_temps.size() + 2) {
     //We're done yo!
-    Reset();
+    current_state_.pump_on = false;
+    current_state_.heater_on = false;
     current_state_.waiting_for_input = true;
     waiting_for_boil_done = true;
     DEBUG_LOG("Waiting for input to finish boil\n");

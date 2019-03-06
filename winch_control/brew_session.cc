@@ -52,7 +52,7 @@ void BrewSession::OnNewBrewState(BrewState new_state) {
   new_transition.new_state.state = new_state;
   // TODO: update current_stage based on state
 // enum BrewStage { PREMASH, MASHING, DRAINING, BOILING, CHILLING, DECANTING, DONE, CANCELLED};
-  int mash_steps = brew_recipe_.mash_times.size();
+  size_t mash_steps = brew_recipe_.mash_times.size();
   // {1,mash_steps} -> mashing
   //  1+mash_steps -> Draining
   //  2+mash_steps -> Boiling
@@ -67,6 +67,15 @@ void BrewSession::OnNewBrewState(BrewState new_state) {
   }
   // TODO: Check if the grainfather registers anything after boil.
 
+  if (new_state != full_state_.state) {
+    if (new_state.waiting_for_temp) {
+      std::cout << "Heating. curr: " << new_state.current_temp << "  target: ";
+      std::cout << new_state.target_temp << std::endl;
+    }
+    if (new_state.timer_on) {
+      std::cout << "timer: " << new_state.timer_seconds_left << std::endl;
+    }
+  }
 
   {
     std::lock_guard<std::mutex> lock(tq_mutex_);
@@ -75,8 +84,13 @@ void BrewSession::OnNewBrewState(BrewState new_state) {
 }
 
 void BrewSession::AddTimeTrigger(int64_t trigger_time, TriggerFunc trigger_func) {
-  RegisterCallback([trigger_time] (const FullBrewState &new_state,
+  RegisterCallback([trigger_time, this] (const FullBrewState &new_state,
         const FullBrewState &prev_state ) {
+      // every n seconds print that we are waiting
+      int64_t sec_left = (trigger_time - new_state.state.read_time) / 1000;
+      if ( sec_left % (30 / zippy_time_divider_) == 0) {
+       std::cout << "Time Trigger: " << sec_left << " seconds remaining" << std::endl;
+      }
       return new_state.state.read_time > trigger_time; },
       trigger_func, false);
 }
@@ -95,8 +109,19 @@ void BrewSession::RecordNewState(FullBrewState new_state, FullBrewState prev_sta
   // UPDATE_ON_CHANGE(weights);
   // UPDATE_ON_CHANGE(times);
   UPDATE_ON_CHANGE(state);
+  if (new_state.state.read_time < full_state_.state.read_time) {
+    std::cout << "Recording update with old timestamp! curr: " << full_state_.state.read_time;
+    std::cout << "  new: " << new_state.state.read_time <<std::endl;
+  } else {
+    full_state_.state.read_time = new_state.state.read_time;
+  }
 }
 
+BrewSession::~BrewSession() {
+  enable_trigger_thread_ = false;
+  if (check_trigger_thread_.joinable())
+    check_trigger_thread_.join();
+}
 void BrewSession::CheckTriggerThread() {
   // we don't use conditional variables here, because we want to check
   // for conditions at a given frequency.
@@ -114,27 +139,31 @@ void BrewSession::CheckTriggerThread() {
         transition = transition_queue_.front();
         transition_queue_.pop_front();
         has_transition = true;
+        if (transition_queue_.size())
+          std::cout << "has transition  queue size: " << transition_queue_.size() << std::endl;
       }
     }
     if(has_transition) {
+      // int ret = 
+      OnChangeState(transition.new_state, transition.prev_state);
       last_event = GetTimeMsec();
-      int ret = OnChangeState(transition.new_state, transition.prev_state);
-      if (ret == BREW_WARNING) {
-        printf("Error processing event\n");
-      }
-      if (ret == BREW_ERROR) {
-        GlobalPause();
+      // if (ret == BREW_WARNING) {
+        // printf("Error processing event\n");
+      // }
+      // if (ret == BREW_ERROR) {
+        // GlobalPause();
         // Pause and tweet
-      }
-      if (ret == BREW_FATAL) {
-        QuitSession();
+      // }
+      // if (ret == BREW_FATAL) {
+        // QuitSession();
         // Stop the brew process
-      }
+      // }
       // Otherwise, record the new state
       RecordNewState(transition.new_state, transition.prev_state);
     } else {
       int64_t time_now = GetTimeMsec();
-      if (time_now - last_event > kMaxTimeBetweenEvents) {
+      if ((time_now - last_event) > kMaxTimeBetweenEvents) {
+        std::cout << "Making transition" << std::endl;
         // make an event with just the latest state:
         transition.new_state = full_state_;
         transition.prev_state = full_state_;
@@ -178,11 +207,11 @@ void BrewSession::StartSession(const char *spreadsheet_id) {
   // ------------------------------------------------------------------
   // Initialize the Grainfather serial interface
   // Make sure things are working
+  grainfather_serial_.Init(std::bind(&BrewSession::OnNewBrewState, this, _1));
   if(grainfather_serial_.TestCommands() < 0) {
     printf("Grainfather serial interface did not pass tests.\n");
     return;
   }
-  grainfather_serial_.Init(std::bind(&BrewSession::OnNewBrewState, this, _1));
   // Load Recipe from spreadsheet
   // Connect to Grainfather
   // Load Session
@@ -198,6 +227,7 @@ void BrewSession::StartSession(const char *spreadsheet_id) {
      return;
    }
   full_state_.weights.RecordInitWater(status.weight);
+  full_state_.weight = status.weight;
 
   grainfather_serial_.AdvanceStage(); // TODO: this should be a StartHeatingForMash command
   // Now tell Grainfather to start heating
@@ -211,9 +241,12 @@ void BrewSession::StartSession(const char *spreadsheet_id) {
      return;
    }
   full_state_.weights.RecordInitRig(status.weight);
+  full_state_.weight = status.weight;
   // wait for temperature
   while (full_state_.state.current_temp < full_state_.state.target_temp) {
     usleep(500000); // sleep half a second
+    std::cout << "Waiting for temp.  Target: " << full_state_.state.target_temp;
+    std::cout << "  Current: " << full_state_.state.current_temp << std::endl;
   }
   // The OnMashTemp should just turn the buzzer off.
   user_interface_.PleaseAddGrain();
@@ -224,6 +257,7 @@ void BrewSession::StartSession(const char *spreadsheet_id) {
      return;
    }
   full_state_.weights.RecordInitGrain(status.weight);
+  full_state_.weight = status.weight;
 
   if(user_interface_.PleaseFinalizeForMash()) return;
   // Okay, we are now ready for Automation!
@@ -235,7 +269,8 @@ void BrewSession::StartSession(const char *spreadsheet_id) {
 
 
   grainfather_serial_.AdvanceStage(); // TODO: this should be a StartMash command
-
+  
+  check_trigger_thread_.join();
 }
 
 void BrewSession::GlobalPause() {
@@ -259,7 +294,7 @@ void BrewSession::QuitSession() {
 // signal on transitions
 // Register wait conditions
 
-int BrewSession::OnChangeState(const FullBrewState &new_state, const FullBrewState &old_state) {
+void BrewSession::OnChangeState(const FullBrewState &new_state, const FullBrewState &old_state) {
   std::vector<ConditionalFunc> call_list;
   {
     std::lock_guard<std::mutex> lock(trigger_mutex_);
@@ -273,6 +308,8 @@ int BrewSession::OnChangeState(const FullBrewState &new_state, const FullBrewSta
         } else {
           iter++;
         }
+      } else {
+        iter++;
       }
     }
   } // end lock
@@ -282,11 +319,11 @@ int BrewSession::OnChangeState(const FullBrewState &new_state, const FullBrewSta
   }
 }
 
-int BrewSession::LoadTriggers() {
+void BrewSession::LoadTriggers() {
   // RegisterCallback(std::bind(&BrewSession::IsMashTemp, this, _1, _2),
       // std::bind(&BrewSession::OnMashTemp, this, _1), false);
-  // RegisterCallback(std::bind(&BrewSession::IsMashComplete, this, _1, _2),
-      // std::bind(&BrewSession::OnMashComplete, this, _1), false);
+  RegisterCallback(std::bind(&BrewSession::IsMashComplete, this, _1, _2),
+      std::bind(&BrewSession::OnMashComplete, this, _1), false);
   RegisterCallback(std::bind(&BrewSession::IsBoilTemp, this, _1, _2),
       std::bind(&BrewSession::OnBoilTemp, this, _1), false);
   RegisterCallback(std::bind(&BrewSession::IsBoilDone, this, _1, _2),
@@ -333,7 +370,9 @@ bool BrewSession::IsMashComplete(const FullBrewState &new_state, const FullBrewS
   return new_state.state.waiting_for_input && !prev_state.state.waiting_for_input;
 }
 int BrewSession::OnMashComplete(FullBrewState current_state) {
+  std::cout << "Triggered: Mash is completed" << std::endl;
   int ret = grainfather_serial_.TurnPumpOff();
+  ret |= grainfather_serial_.AdvanceStage();
   // if comms fails with grainfather, might as well turn off valves:
   SetFlow(NO_PATH);
   full_state_.weights.RecordAfterMash(current_state.weight);
@@ -341,49 +380,54 @@ int BrewSession::OnMashComplete(FullBrewState current_state) {
     return ret;
   }
   // Now we wait for a minute or so to for fluid to drain from hoses
-  AddTimeTrigger(GetTimeMsec() + (60*1000),
+  AddTimeTrigger(GetTimeMsec() + (60*1000 / zippy_time_divider_),
       std::bind(&BrewSession::RaiseStep1, this, _1));
   return 0;
 }
 
 // Raise a little bit to check that we are not caught
 int BrewSession::RaiseStep1(FullBrewState current_state) {
+  std::cout << "Triggered: RaiseStep1" << std::endl;
   int ret = winch_controller_.RaiseToDrain_1();
   if (ret < 0) {
     return ret;
   }
   // Now wait for 5 minutes, so any weight triggers have a chance to catch
-  AddTimeTrigger(GetTimeMsec() + (5 * 60 * 1000),
+  AddTimeTrigger(GetTimeMsec() + (5 * 60 * 1000 / zippy_time_divider_),
       std::bind(&BrewSession::RaiseStep2, this, _1));
   return 0;
 }
 // Raise the rest of the way
 int BrewSession::RaiseStep2(FullBrewState current_state) {
+  std::cout << "Triggered: RaiseStep2" << std::endl;
   int ret = winch_controller_.RaiseToDrain_2();
   if (ret < 0) {
     return ret;
   }
   // Wait one minute, take after lift weight
-  AddTimeTrigger(GetTimeMsec() + (1 * 60 * 1000),
+  AddTimeTrigger(GetTimeMsec() + (1 * 60 * 1000 / zippy_time_divider_),
       std::bind(&BrewSession::RaiseStep3, this, _1));
   return 0;
 }
 
 // After weight has settled from lifting the mash out
 int BrewSession::RaiseStep3(FullBrewState current_state) {
+  std::cout << "Triggered: RaiseStep3" << std::endl;
   full_state_.weights.RecordAfterLift(current_state.weight);
   // Drain for 45 minutes
-  AddTimeTrigger(GetTimeMsec() + (45 * 60 * 1000),
+  AddTimeTrigger(GetTimeMsec() + (45 * 60 * 1000 / zippy_time_divider_),
       std::bind(&BrewSession::OnDrainComplete, this, _1));
   return 0;
 }
 
 int BrewSession::OnDrainComplete(FullBrewState current_state) {
+  std::cout << "Triggered: Draining is complete" << std::endl;
   full_state_.weights.RecordAfterDrain(current_state.weight);
   int ret = winch_controller_.MoveToSink();
   if (ret < 0) {
     return ret;
   }
+  scale_.ExpectEvaporation();
   return grainfather_serial_.AdvanceStage();
 }
 
@@ -397,12 +441,13 @@ int BrewSession::OnDrainComplete(FullBrewState current_state) {
 // advance to boil
 
 bool BrewSession::IsBoilTemp(const FullBrewState &new_state, const FullBrewState &prev_state) {
-  if (new_state.current_stage != DRAINING) return false;
-  if (prev_state.current_stage == DRAINING) return false;
-  if (new_state.state.timer_on || !prev_state.state.timer_on) return false;
+  if (new_state.current_stage != BOILING) return false;
+  if (new_state.state.waiting_for_temp || !prev_state.state.waiting_for_temp) return false;
   return new_state.state.waiting_for_input && !prev_state.state.waiting_for_input;
 }
+
 int BrewSession::OnBoilTemp(FullBrewState current_state) {
+  std::cout << "Triggered: Boiling Temp reached" << std::endl;
   int ret = winch_controller_.LowerHops();
   if (ret < 0) {
     return ret;
@@ -422,13 +467,15 @@ int BrewSession::OnBoilTemp(FullBrewState current_state) {
 bool BrewSession::IsBoilDone(const FullBrewState &new_state, const FullBrewState &prev_state) {
   // if (new_state.stage != SPARGE) return false;
   // Was just in boil stage:
-  if (prev_state.current_stage == BOILING) return false;
+  if (prev_state.current_stage != BOILING) return false;
+  if (new_state.current_stage != BOILING) return false;
   // timer just turned off:
-  if (!new_state.state.timer_on || prev_state.state.timer_on) return false;
+  if (new_state.state.timer_on || !prev_state.state.timer_on) return false;
   // Now we are waiting for input:
   return new_state.state.waiting_for_input && !prev_state.state.waiting_for_input;
 }
 int BrewSession::OnBoilDone(FullBrewState current_state) {
+  std::cout << "Triggered: Boiling is complete" << std::endl;
   // When Boil is done
   // Advance
   // Pump Off, valves closed
@@ -436,32 +483,36 @@ int BrewSession::OnBoilDone(FullBrewState current_state) {
   if (ret < 0) {
     return ret;
   }
-  if (ret = grainfather_serial_.TurnPumpOff()) return ret;
+  ret = grainfather_serial_.TurnPumpOff();
+  if (ret) return ret;
   SetFlow(NO_PATH);
   // Wait one minute before raising hops
-  AddTimeTrigger(GetTimeMsec() + (1 * 60 * 1000),
+  AddTimeTrigger(GetTimeMsec() + (1 * 60 * 1000 / zippy_time_divider_),
       std::bind(&BrewSession::OnPostBoil1Min, this, _1));
   return 0;
 }
 
 int BrewSession::OnPostBoil1Min(FullBrewState current_state) {
+  std::cout << "Triggered: OnPostBoil1Min" << std::endl;
   // 1 minute after boil off
   // Raise Hops
   int ret = winch_controller_.RaiseHops();
   if (ret < 0) {
     return ret;
   }
-  AddTimeTrigger(GetTimeMsec() + (4 * 60 * 1000),
+  AddTimeTrigger(GetTimeMsec() + (4 * 60 * 1000 / zippy_time_divider_),
       std::bind(&BrewSession::StartDecanting, this, _1));
   return 0;
 }
 
 int BrewSession::StartDecanting(FullBrewState current_state) {
+  std::cout << "Triggered: StartDecanting" << std::endl;
   full_state_.weights.RecordAfterBoil(current_state.weight);
   SetFlow(CHILLER);
   ActivateChillerPump();
   grainfather_serial_.TurnPumpOn();
   full_state_.current_stage = DECANTING;
+  scale_.ExpectDecant();
   return 0;
 }
 // 5 minutes after boil
@@ -477,10 +528,12 @@ bool BrewSession::IsDecantFinished(const FullBrewState &new_state, const FullBre
 
 
 int BrewSession::OnDecantFinished(FullBrewState current_state) {
+  std::cout << "Triggered: Decanting is complete" << std::endl;
   grainfather_serial_.TurnPumpOff();
   DeactivateChillerPump();
   SetFlow(NO_PATH);
   full_state_.current_stage = DONE;
+  QuitSession();
 
   return 0;
 }
@@ -498,11 +551,14 @@ bool BrewSession::IsRapidWeightLoss(const FullBrewState &new_state, const FullBr
 
 
 int BrewSession::OnRapidWeightLoss(FullBrewState current_state) {
+  std::cout << "Triggered: Rapid weight loss detected" << std::endl;
   // if weight decreases rapidly (when not decanting)
   // Stop pump, valves
   // pause session
-  GlobalPause();
+  QuitSession();
+  // GlobalPause();
   // TODO: tweet out a warning!
+  return -1;
 }
 
 
@@ -510,9 +566,12 @@ bool BrewSession::IsGrainfatherPickup(const FullBrewState &new_state, const Full
   return new_state.weight < kGrainfatherPickupThresholdGrams;
 }
 int BrewSession::OnGrainfatherPickup(FullBrewState current_state) {
-  GlobalPause();
+  std::cout << "Triggered: Pickup detected" << std::endl;
+  // GlobalPause();
+  QuitSession();
   // if weight goes below empty grainfather
   // Stop session
+  return -1;
 }
 
 // TODO: 

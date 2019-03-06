@@ -432,7 +432,9 @@ int BrewLogger::SetSession(const char *spreadsheet_id) {
 BrewLogger::~BrewLogger() {
   quit_threads_ = true;
   if (disable_for_test_) return;
-  message_thread_.join();
+  if (message_thread_.joinable()) {
+    message_thread_.join();
+  }
 }
 
 void BrewLogger::Log(int severity, std::string message) {
@@ -481,9 +483,9 @@ std::string BrewLogger::GetValue(std::string range) {
 
 BrewRecipe fake_recipe = {
  .session_name = "Fake Recipe",
- .mash_temps = {10.0, 12.0},
+ .mash_temps = {45.0, 60.0},
  .mash_times = {1, 2},
- .boil_minutes = 1,
+ .boil_minutes = 20,
  .grain_weight_grams = 8000,
  .hops_grams = 56,
  .hops_type = "Bestest Hops",
@@ -492,7 +494,7 @@ BrewRecipe fake_recipe = {
 
 
 
-
+// TODO: Add hops amount and type
 BrewRecipe BrewLogger::ReadRecipe() {
   if (disable_for_test_) return fake_recipe;
   BrewRecipe recipe;

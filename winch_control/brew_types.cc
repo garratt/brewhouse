@@ -16,7 +16,7 @@ int64_t GetTimeMsec() {
     return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
-void BrewRecipe::Print() {
+void BrewRecipe::Print() const {
   std::cout << " brew session: " << session_name << std::endl;
   std::cout << " boil time: " << boil_minutes << std::endl;
   std::cout << " Grain Weight: " << grain_weight_grams << std::endl;
@@ -30,10 +30,10 @@ void BrewRecipe::Print() {
 
 // This creates the string which is passed to the Grainfather to
 // Load a session
-std::string BrewRecipe::GetSessionCommand() {
+std::string BrewRecipe::GetSessionCommand() const {
   std::string ret;
   char buffer[20];
-  snprintf(buffer, 20, "R%u,%u,%2.1f,%2.1f,                  ", boil_minutes,
+  snprintf(buffer, 20, "R%u,%lu,%2.1f,%2.1f,                  ", boil_minutes,
            mash_temps.size(), initial_volume_liters, sparge_liters);
   ret += buffer;
   // convert name string to all caps
@@ -52,7 +52,6 @@ std::string BrewRecipe::GetSessionCommand() {
 
 int BrewRecipe::Load(const std::string &in) {
   std::string ret;
-  char buffer[20];
   unsigned mash_steps;
   sscanf(in.c_str(), "R%u,%u,%lf,%lf,", &boil_minutes,
       &mash_steps, &initial_volume_liters, &sparge_liters);
@@ -79,7 +78,7 @@ int BrewRecipe::Load(const std::string &in) {
 }
 
 // just check the stuff that gets loaded
-bool BrewRecipe::operator==(const BrewRecipe &other) {
+bool BrewRecipe::operator==(const BrewRecipe &other) const {
   if (session_name != other.session_name) return false;
   if (mash_temps.size() != other.mash_temps.size()) return false;
   if (mash_times.size() != other.mash_times.size()) return false;
@@ -93,7 +92,7 @@ bool BrewRecipe::operator==(const BrewRecipe &other) {
   return true;
 }
 
-bool BrewState::operator!=(const BrewState& other) {
+bool BrewState::operator!=(const BrewState& other) const {
   if (timer_on != other.timer_on) return true;
   if (timer_paused != other.timer_paused) return true;
   if (timer_seconds_left != other.timer_seconds_left) return true;
@@ -112,7 +111,7 @@ bool BrewState::operator!=(const BrewState& other) {
   return false;
 }
 
-std::string BrewState::ToString() {
+std::string BrewState::ToString() const {
   char ret[17*4+10];
   // Each of these strings overruns the length, but is overwritten by the next:
   int sec_left = timer_seconds_left == 0? 0 : timer_seconds_left % 60 + 1;
@@ -177,7 +176,7 @@ int BrewState::Load(std::string in) {
   return 0;
 }
 
-void BrewState::Print() {
+void BrewState::Print() const {
   std::cout << "read_time " << read_time << std::endl;
   std::cout << "timer_on " << timer_on << std::endl;
   std::cout << "timer_paused " << timer_paused << std::endl;
@@ -218,7 +217,7 @@ int VerifyBrewRecipe(BrewRecipe br) {
   std::string brs = br.GetSessionCommand();
   std::string brs1 = br1.GetSessionCommand();
   // Format the command strings so they can be read:
-  for (int i = 18; i < brs.size(); i+=19) {
+  for (unsigned i = 18; i < brs.size(); i+=19) {
     brs[i] = '\n';
     brs1[i] = '\n';
   }

@@ -88,7 +88,7 @@ class BrewManager {
       // of a signal, and returns the beep length when the beep stops.
       // Also flags if the long "mash ready" beep occurrs, or if continous
       // beeping is detected.
-      auto beep_status = beep_tracker_.CheckBeep();
+      // auto beep_status = beep_tracker_.CheckBeep();
       // Checks if new weight is available.  If it is, the weight is
       // read out (takes about 1 ms).  If there are enough readings, the
       // readings are filtered and a weight is produced.

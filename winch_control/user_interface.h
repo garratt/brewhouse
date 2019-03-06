@@ -10,7 +10,14 @@
 
 #include "winch.h"
 
+
+class UserInterface {
+  bool disable_for_test_ = false;
   int WaitForEnter() {
+    if (disable_for_test_) {
+      std::cout << "---- User Input disabled for testing ----" << std::endl;
+      return 0;
+    }
       char buf[256];
       std::cout << "Press [Enter] when done, or [q] to quit." << std::endl;
       std::cin.getline (buf,256);
@@ -25,12 +32,12 @@
       return 0;
     }
 
-class UserInterface {
-
-
   // std::thread ui_thread_;
 
   public:
+
+   void DisableForTest() { disable_for_test_ = true;}
+
     // Ask the user to fill with water
     int PleaseFillWithWater(double initial_volume_liters) {
       std::cout << "Please fill the Grainfather with " << initial_volume_liters;
@@ -58,15 +65,23 @@ class UserInterface {
       std::cout << "      |-------- go [u]p, [d]own, or for both: [l]eft or [r]ight.s"<< std::endl;
       std::cout << "            |-- the time to leave the winches on."<< std::endl;
       char buf[256];
+      if (disable_for_test_) {
+        std::cout << "---- User Input disabled for testing ----" << std::endl;
+        return 0;
+      }
       std::cout << "Press [Enter] when done, or [q] to quit." << std::endl;
       while(1) {
+        printf(">");
         std::cin.getline (buf,256);
         if (strlen(buf) > 0) {
           if (buf[0] == 'r' || buf[0] == 'l' || buf[0] == 'b') {
             raw_winch::ManualWinchControl(buf[0], buf[1], atoi(buf + 2));
+
           }
           if (buf[0] == 'q') 
             return 0;
+        } else {
+          return 0;
         }
       }
     }
@@ -86,8 +101,6 @@ class UserInterface {
       std::cout << "After this step, we go fully autonomous!!" << std::endl;
       return WaitForEnter();
     }
-;
-
     int UpdateVolume(double current_volume_liters);
 
 
