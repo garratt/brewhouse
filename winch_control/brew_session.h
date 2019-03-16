@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #pragma once
+#include "scale_filter.h"
 
 #include "brew_types.h"
 #include "gpio.h"
