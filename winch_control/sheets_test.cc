@@ -2,12 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "brewmanager.h"
+// #include "brewmanager.h"
 #include "grainfather2.h"
 int main(int argc, char **argv) {
 
-  BrewLogger brew_logger;
-  brew_logger.ReadRecipe().Print();
+  GrainfatherSerial gs;
+  gs.Init(nullptr);
+  gs.TestCommands();
+  // gs.QuitSession();
+  // BrewLogger brew_logger;
+  // brew_logger.ReadRecipe().Print();
   // brew_logger.GetValues("Overview!G5:G9");
 
 #if 0

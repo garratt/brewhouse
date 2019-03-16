@@ -60,7 +60,7 @@ BrewState GrainfatherSerial::GetLatestState(int64_t prev_read) {
 // returns -1 for all errors
 int GrainfatherSerial::CommandAndVerify(const char *command, bool (*verify_condition)(BrewState)) {
   BrewState latest = GetLatestState();
-  // std::cout<<" CommandAndVerify: initial state: "<< latest.ToString() <<std::endl;
+  std::cout<<" CommandAndVerify: initial state: "<< latest.ToString() <<std::endl;
   if (!latest.valid) return -1;
   // Already met condition, i.e. We asked to turn pump on, but it already was on.
   if (verify_condition((latest))) return 0;
@@ -70,7 +70,7 @@ int GrainfatherSerial::CommandAndVerify(const char *command, bool (*verify_condi
   }
   int64_t command_time_ms = GetTimeMsec();
   BrewState next = GetLatestState(command_time_ms);
-  // std::cout<<" CommandAndVerify: after state: "<< next.ToString() <<std::endl;
+  std::cout<<" CommandAndVerify: after state: "<< next.ToString() <<std::endl;
   if (!next.valid) {
     printf("Failed to get another reading from Grainfather.\n");
     return -1;
@@ -367,6 +367,6 @@ int GrainfatherSerial::SendSerial(std::string to_send) {
   }
   // TODO: either use O_SYNC, or store time when we believe write will be done
   // so we don't collide.
-  usleep(1500 * to_send.size());
+  usleep(15000 * to_send.size());
   return 0;
 }
