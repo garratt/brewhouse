@@ -10,7 +10,6 @@
 #include "grainfather2.h"
 #include "user_interface.h"
 #include "winch.h"
-#include "scale.h"
 #include "valves.h"
 #include "logger.h"
 #include <utility>
@@ -21,22 +20,88 @@
 #include <list>
 #include <functional>
 
+// The brew session can be divided into a few main parts:
+// 1) Setup and adding ingredients.
+//   There are a couple of states that we get from the grainfather,
+//   but it is mostly user input until we start the mash
+//     1) Test connections, interfaces
+//     2) Check recipe
+//     3) Fill with water
+//     4) Add hops to basket
+//     5) Position Winches
+//     6) Wait for temp, add Grains
+//     7) Install top hardware
+//     8) Start mash
+//
+// 2) Mashing
+//   There is no user input or other automation here.
+//   We can monitor the state, and don;t have to have tight control
+//   loops.
+//     1) Wait for mash stages, maybe take weight at each stage
+// 3) Draining and Boil
+//   Draining is all about using the winch and scale.  We want to make
+//   sure we don't lift the kettle or pump the wort out of the kettle.
+//   Most transitions are based on time and weight
+//   Start: when mash is done.
+//     1) turn everything off, lift a little,
+//        check that we didn't lift the kettle
+//        lift more to drain.
+//     2) After a while, declare draining done
+//        Lift and move mash to sink
+//        Initiate heat to boil
+//     3) When Boil temp is reached, lower in hops
+//        Enable pumps, check that we aren't losing wort
+//        wait for boil to be done
+//     4) When boil is done:
+//        Turn pumps off
+//        Turn scale warnings off
+//        Raise up hops
+//        let hops drain for a bit
+//        raise the rest of the way
+//        Can quit session at this point.
+// 4) Decanting
+//    For this stage, the only thing we do with the grainfather is
+//    turn the pump on.
+//      1) may do something with valves and outputs to make sure the
+//         boiling wort sterilizes them
+//      2) Set Valves, enable pump
+//         Monitor weight until empty, to turn off the pump
+//
+//
+//  Grainfather interface:
+//  state callback -> just for logging to the spreadsheet
+//  bool IsMashtemp();
+//  int  StartMash();
+//  bool IsMashDone();
+//  int StartSparge() {
+//    // Check that we are at end of mash
+//    TurnPumpOff();
+//    AdvanceStage();
+//    }
+//  int HeatToBoil();
+//  bool IsBoilTemp();
+//  int StartBoil();
+//  bool IsBoilDone();
+//
+//
+
+
+
+
+
 
 class BrewSession {
 // session info, shouldn't change:
   BrewRecipe brew_recipe_;
-  int64_t drain_duration_s;  // loaded from spreadsheet
-  std::string spreadsheet_id;
+  int64_t drain_duration_s_ = 45 * 60;  // loaded from spreadsheet
+  // std::string spreadsheet_id_;
   GrainfatherSerial grainfather_serial_;
   FullBrewState full_state_;
   WinchController winch_controller_;
-  WeightLimiter weight_limiter_;
+  // WeightLimiter weight_limiter_;
   BrewLogger brew_logger_;
-  WeightFilter scale_;
+  ScaleFilter scale_;
   UserInterface user_interface_;
-  static constexpr uint32_t kStopDecantingWeightGrams = 10000;
-  static constexpr uint32_t kWeightLossThresholdGrams = 75;
-  static constexpr uint32_t kGrainfatherPickupThresholdGrams = 75;
 
   bool logger_disabled_ = false;
   bool grainfather_disabled_ = false;
@@ -56,49 +121,40 @@ class BrewSession {
     assert(user_interface_bypassed_ == false);
   }
 
-  struct StateTransition {
-    FullBrewState new_state, prev_state;
-  };
+  void Fail(const char *segment);
 
-  std::deque<StateTransition> transition_queue_;
-  std::mutex tq_mutex_;
+  // if the scale stops reading correctly
+  void OnScaleError() {GlobalPause();}
 
-  using IsTriggered = std::function<bool(const FullBrewState&, const FullBrewState&)>;
-    // bool (*)(const FullBrewState&, const FullBrewState&);
-  using TriggerFunc = std::function<void(const FullBrewState&)>;
-  // void (*)(const FullBrewState&);
-  struct ConditionalFunc {
-    bool repeat = false;
-    std::function<bool(const FullBrewState&, const FullBrewState&)> condition;
-    std::function<void(const FullBrewState&)> callback;
-  };
-  std::vector<ConditionalFunc> triggers_;
-  std::mutex trigger_mutex_;
+  // If we are losing wort
+  void OnDrainAlarm() {GlobalPause();}
 
-  void RegisterCallback(IsTriggered condition, TriggerFunc callback, bool repeat);
+  // Not to be used for precise timing!
+  void SleepMinutes(int minutes) {
+    SleepSeconds(minutes * 60);
+  }
 
-  // Called by other thread, when new weight is recorded
-  void OnNewWeight(double new_weight);
-
-  // Called by other thread, when new state is recorded
-  void OnNewBrewState(BrewState new_state);
-  void RecordNewState(FullBrewState new_state, FullBrewState prev_state);
-
-
-  void LoadTriggers();
-  void AddTimeTrigger(int64_t trigger_time, TriggerFunc trigger_func);
-  bool enable_trigger_thread_ = false;
-  bool global_pause_ = false;
-  static constexpr int64_t kMaxTimeBetweenEvents = 2000; // 1 second
-
-  void CheckTriggerThread();
-  std::thread check_trigger_thread_;
+  // Not to be used for precise timing!
+  void SleepSeconds(int seconds) {
+    int64_t one_second = 1000000 / zippy_time_divider_;
+    for (int i = 0; i < seconds; ++i) {
+      usleep(one_second);
+    }
+  }
 
   public:
   BrewSession() : scale_("calibration.txt") {}
 
   // Starts entire brewing session
-  void StartSession(const char *spreadsheet_id);
+  int Run(const char *spreadsheet_id);
+  // The individual stages of the brew session are here:
+  int InitSession(const char *spreadsheet_id);
+  int PrepareSetup();
+  int Mash();
+  int Drain();
+  int Boil();
+  int Decant();
+
 
   void GlobalPause();
 
@@ -114,46 +170,4 @@ class BrewSession {
   void SetZippyTime() { zippy_time_divider_ = 30; }
   void BypassUserInterface() { user_interface_.DisableForTest(); user_interface_bypassed_ = true; }
 
-
-  ~BrewSession();
-  // Mashing
-  // bool IsMashTemp(const FullBrewState &new_state, const FullBrewState &prev_state);
-  // int OnMashTemp(const FullBrewState &current_state);
-  // bool IsMashStart(const FullBrewState &new_state, const FullBrewState &prev_state);
-  // int OnMashStart(FullBrewState current_state);
-  bool IsMashComplete(const FullBrewState &new_state, const FullBrewState &prev_state);
-  int OnMashComplete(FullBrewState current_state);
-
-  // Draining
-  // Raise a little bit to check that we are not caught
-  int RaiseStep1(FullBrewState current_state);
-  // Raise the rest of the way
-  int RaiseStep2(FullBrewState current_state);
-  // After weight has settled from lifting the mash out
-  int RaiseStep3(FullBrewState current_state);
-  int OnDrainComplete(FullBrewState current_state);
-
-  // Boil
-  bool IsBoilTemp(const FullBrewState &new_state, const FullBrewState &prev_state);
-  int OnBoilTemp(FullBrewState current_state);
-  bool IsBoilDone(const FullBrewState &new_state, const FullBrewState &prev_state);
-  int OnBoilDone(FullBrewState current_state);
-  int OnPostBoil1Min(FullBrewState current_state);
-
-  // Decanting
-  int StartDecanting(FullBrewState current_state);
-  bool IsDecantFinished(const FullBrewState &new_state, const FullBrewState &prev_state);
-  int OnDecantFinished(FullBrewState current_state);
-
-  // Error Triggers
-  // TODO: this should really be time based
-  bool IsRapidWeightLoss(const FullBrewState &new_state, const FullBrewState &prev_state);
-  int OnRapidWeightLoss(FullBrewState current_state);
-  bool IsGrainfatherPickup(const FullBrewState &new_state, const FullBrewState &prev_state);
-  int OnGrainfatherPickup(FullBrewState current_state);
-  int CheckSystemFunctionality();
-
 };
-// TODO: 
-// Make init function, check all functionality
-// make source fle, make main file for this.

@@ -14,6 +14,6 @@ int main(int argc, char **argv) {
   session.SetZippyTime();
   session.BypassUserInterface();
 
-  session.StartSession("");
+  session.Run("");
   return 0;
 }

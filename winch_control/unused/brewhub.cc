@@ -17,7 +17,7 @@
 #include <fcntl.h>
 
 #include "gpio.h"
-#include "grainfather.h"
+// #include "grainfather.h"
 #include "scale.h"
 #include "valves.h"
 #include "winch.h"

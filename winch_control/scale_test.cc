@@ -3,13 +3,18 @@
 // found in the LICENSE file.
 
 #include <iostream>
-#include "scale.h"
+#include "scale_filter.h"
+
+void PrintWeight(double grams, int64_t wtime) {
+  printf("Weight: %4.5lf   time: %ld\n", grams, wtime);
+}
+
+
 int main(int argc, char **argv) {
-  if (SetDirection(SCALE_DATA, 0)) return -1;
-  if (SetDirection(SCALE_SCLK, 1, 0)) return -1;
+   ScaleFilter sf("calibration.txt");
+   sf.SetPeriodicWeightCallback(1000, &PrintWeight);
  while (1) {
-    WaitForHX711();
-    std::cout << ReadHX711Data() << std::endl;
+    sleep(10);
  }
   return 0;
 }

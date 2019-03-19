@@ -21,8 +21,20 @@ double ScaleFilter::GetWeight(int64_t since_time) {
   return FilterData(since_time);
 }
 
+// This function does a silly amount of blocking, but we've got lots of time...
+double ScaleFilter::GetWeightStartingNow() {
+  int64_t tnow = GetTimeMsec();
+  // How much should we wait?
+  // we won't use more than kPointsForFiltering
+  // measuring period * kPointsForFiltering
+  usleep(100000 * kPointsForFiltering);
+  return FilterData(tnow);
+}
+
+
+
 void ScaleFilter::SetPeriodicWeightCallback(int64_t reporting_interval,
-    std::function<void(int64_t, double)> callback) {
+    std::function<void(double, int64_t)> callback) {
   periodic_update_period_ = reporting_interval;
   periodic_callback_ = callback;
 }

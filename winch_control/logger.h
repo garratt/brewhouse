@@ -15,6 +15,18 @@ namespace oauth {
 class OathAccess;
 } // namespace oauth
 
+enum WeightEvent {
+  InitWater = 0,
+  InitRig = 1,
+  InitGrain = 2,
+  AfterMash = 3,
+  AfterDrain = 4,
+  AfterLift = 5,
+  AfterBoil = 6,
+  AfterDecant = 7
+};
+
+
 // This class logs data to a google spreadsheet
 class BrewLogger {
   bool disable_for_test_ = false;
@@ -27,7 +39,9 @@ class BrewLogger {
   void Log(int severity, std::string message);
 
   void LogWeight(double grams, time_t log_time = 0);
+  void LogWeightEvent(WeightEvent event_id, double grams);
 
+  void LogBrewState(const BrewState &state);
   // Set a new spreadsheet for the session.
   // Verifies that this spreadsheet has some required components,
   // and that we are not overwriting a previous session
@@ -63,6 +77,8 @@ class BrewLogger {
   static constexpr const char *kWaterVolumesLoc = "Overview!G14:G15";
   static constexpr const char *kLogRange = "Log!A2:E3";
   static constexpr const char *kWeightRange = "weights!A2:E3";
+  static constexpr const char *kWeightEventFormat = "weights!B%d";
+  static constexpr int kWeightEventStartRow = 4;
 
   std::string spreadsheet_id_;
   std::unique_ptr<oauth::OathAccess> sheets_access_, drive_access_;

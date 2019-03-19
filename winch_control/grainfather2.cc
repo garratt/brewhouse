@@ -131,6 +131,7 @@ int GrainfatherSerial::LoadSession(const char *session_string) {
   std::cout << "Sending Command to load session" << std::endl;
   int ret = QuitSession(); // make sure there is no current session
   if (ret) return ret;
+  if (loaded_session_.Load(session_string)) return -1;
   return CommandAndVerify(session_string,
       [](BrewState bs) {return bs.brew_session_loaded; });
 }
@@ -211,10 +212,6 @@ BrewState GrainfatherSerial::ParseState(char in[kStatusLength]) {
   ret.read_time = GetTimeMsec();
   ret.valid = true;
   return ret;
-}
-
-void GrainfatherSerial::RegisterBrewStateCallback(std::function<void(BrewState)> callback) {
-  brew_state_callback_ = callback;
 }
 
 // callback could be a nullptr, I don't care here
@@ -370,3 +367,73 @@ int GrainfatherSerial::SendSerial(std::string to_send) {
   usleep(15000 * to_send.size());
   return 0;
 }
+
+
+
+
+bool GrainfatherSerial::IsMashTemp() {
+  return latest_state_.stage == 1 &&
+    latest_state_.waiting_for_input;
+}
+bool GrainfatherSerial::IsMashDone() {
+  return latest_state_.waiting_for_input &&
+    latest_state_.stage == loaded_session_.mash_temps.size();
+}
+bool GrainfatherSerial::IsBoilTemp() {
+  // This could trigger at other times, but if we are only doing this wait
+  // when we are preparing to boil, it should be fine...
+  return !latest_state_.waiting_for_temp;
+  // && latest_state_.stage == loaded_session_.mash_temps.size();
+}
+
+bool GrainfatherSerial::IsBoilDone() {
+  return latest_state_.waiting_for_input &&
+    latest_state_.stage == loaded_session_.mash_temps.size() + 2;
+}
+bool GrainfatherSerial::IsInSparge() {
+  return latest_state_.waiting_for_input &&
+    latest_state_.stage == loaded_session_.mash_temps.size() + 1;
+}
+
+int GrainfatherSerial::StartMash() {
+  if (!IsMashTemp()) {
+    printf("GrainfatherSerial::StartMash: in wrong state!\n");
+    return -1;
+  }
+  if (AdvanceStage()) return -1;
+  return 0;
+}
+
+
+
+int GrainfatherSerial::StartSparge() {
+  // Check that we are at end of mash
+  if (!IsMashDone()) {
+    printf("GrainfatherSerial::StartSparge: in wrong state!\n");
+    return -1;
+  }
+  if (TurnPumpOff()) return -1;
+  if (AdvanceStage()) return -1;
+  return 0;
+
+}
+
+int GrainfatherSerial::HeatToBoil() {
+  if (!IsInSparge()) {
+    printf("GrainfatherSerial::HeatToBoil: in wrong state!\n");
+    return -1;
+  }
+  if (AdvanceStage()) return -1;
+  return 0;
+}
+
+
+int GrainfatherSerial::StartBoil() {
+  if (!IsBoilTemp()) {
+    printf("GrainfatherSerial::StartBoil: in wrong state!\n");
+    return -1;
+  }
+  if (AdvanceStage()) return -1;
+  return 0;
+}
+

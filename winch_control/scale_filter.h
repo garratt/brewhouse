@@ -31,10 +31,15 @@ class ScaleFilter {
   // point.
   double GetWeight(int64_t since_time = 0);
 
+  // Get an averaged weight using readings after this call was made.
+  // This call will block until enough readings are available, then return the
+  // weight.
+  double GetWeightStartingNow();
+
   // Sets a callback to be called at a constant reporting_interval (in milliseconds)
   // with the time of the latest measurement and a filtered weight reading.
   void SetPeriodicWeightCallback(int64_t reporting_interval,
-                                 std::function<void(int64_t, double)> callback);
+                                 std::function<void(double, int64_t)> callback);
 
   // This can be checked at any time
   // Checks if the weight is below the Kettle lifted threshold.

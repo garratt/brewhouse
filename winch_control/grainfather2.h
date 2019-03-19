@@ -29,6 +29,7 @@ class GrainfatherSerial {
   std::thread reading_thread_;
   std::function<void(BrewState)> brew_state_callback_;
   std::mutex state_mutex_;
+  BrewRecipe loaded_session_;
   bool read_error_ = false;
   int fd_;
   bool disable_for_test_ = false;
@@ -56,7 +57,8 @@ class GrainfatherSerial {
   int TurnHeatOn();
   int TurnHeatOff();
   int QuitSession();
-  int AdvanceStage();
+  int AdvanceStage(); // TODO: this is a difficult command to verify.
+                      //       Break it into the stateful functions.
   int PauseTimer();
   int ResumeTimer();
 
@@ -64,9 +66,17 @@ class GrainfatherSerial {
 
   int WaitForValid();
 
-
-  // Register a callback to be called when a new brewstate is read:
-  void RegisterBrewStateCallback(std::function<void(BrewState)> callback);
+  // Stateful functions:
+  int HeatForMash() { AdvanceStage(); return 0; }
+  bool IsMashTemp();
+  int  StartMash();
+  bool IsMashDone();
+  int StartSparge();
+  bool IsInSparge(); // just used as a check for HeatToBoil
+  int HeatToBoil();
+  bool IsBoilTemp();
+  int StartBoil();
+  bool IsBoilDone();
 
   // Test all the commands and register a callback for brewstate updates
   int Init(std::function<void(BrewState)> callback);

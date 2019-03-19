@@ -452,6 +452,18 @@ void BrewLogger::Log(int severity, std::string message) {
   // TODO: also log to file
 }
 
+
+void BrewLogger::LogWeightEvent(WeightEvent event_id, double grams) {
+  // TODO: check for invalid values?
+  char values[30];
+  char range[15];
+  snprintf(values, 30, "{\"values\":[[\"%lf\"]]}", grams);
+  snprintf(range, 15, kWeightEventFormat, kWeightEventStartRow + (int)event_id);
+  EnqueueMessage(range, spreadsheet_id_.c_str(), values);
+}
+
+
+
 void BrewLogger::LogWeight(double grams, time_t log_time) {
   if (disable_for_test_) return;
   // time, time, weight
@@ -521,4 +533,9 @@ BrewRecipe BrewLogger::ReadRecipe() {
     recipe.mash_times.push_back(atoi(mash_times[i].c_str()));
   }
   return recipe;
+}
+
+
+void BrewLogger::LogBrewState(const BrewState &state) {
+  // TODO: log each field as a column
 }
