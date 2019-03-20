@@ -12,10 +12,6 @@ int main(int argc, char **argv) {
   // std::cout << obj_read << "  "  << f1 << "  "<< f2  << std::endl;
   // return 0;
 
-  if (Test_Types()) {
-    printf("failed to verify type conversions.\n");
-    return -1;
-  }
   GrainfatherSerial grainfather;
   grainfather.DisableForTest();
   if(grainfather.Init(nullptr)) {

@@ -34,6 +34,7 @@ struct BrewRecipe {
 
   // just check the stuff that gets loaded
   bool operator==(const BrewRecipe &other) const;
+  bool operator!=(const BrewRecipe &other) const;
 
 };
 
@@ -51,6 +52,7 @@ struct BrewState {
   bool valid = false;
 
   bool operator!=(const BrewState& other) const;
+  bool operator==(const BrewState& other) const;
 
   // Serialize to string what would get sent from the grainfather
   // For testing and faking purposes
@@ -100,4 +102,3 @@ struct FullBrewState {
 };
 
 int64_t GetTimeMsec();
-int Test_Types();

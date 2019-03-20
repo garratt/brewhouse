@@ -1,6 +1,46 @@
 cmake_minimum_required(VERSION 2.8.9)
 project(brewhouse)
 
+# -----------  Google Test -----------------------------------
+# Download and unpack googletest at configure time
+configure_file(CMakeLists.txt.in googletest-download/CMakeLists.txt)
+execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
+  RESULT_VARIABLE result
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
+if(result)
+  message(FATAL_ERROR "CMake step for googletest failed: ${result}")
+endif()
+execute_process(COMMAND ${CMAKE_COMMAND} --build .
+  RESULT_VARIABLE result
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
+if(result)
+  message(FATAL_ERROR "Build step for googletest failed: ${result}")
+endif()
+
+# Prevent overriding the parent project's compiler/linker
+# settings on Windows
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+# Add googletest directly to our build. This defines
+# the gtest and gtest_main targets.
+add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/googletest-src
+                 ${CMAKE_CURRENT_BINARY_DIR}/googletest-build
+                 EXCLUDE_FROM_ALL)
+
+# The gtest/gtest_main targets carry header search path
+# dependencies automatically when using CMake 2.8.11 or
+# later. Otherwise we have to add them here ourselves.
+if (CMAKE_VERSION VERSION_LESS 2.8.11)
+  include_directories("${gtest_SOURCE_DIR}/include")
+endif()
+
+# Now simply link against gtest or gtest_main as needed. Eg
+# add_executable(example example.cpp)
+# target_link_libraries(example gtest_main)
+# add_test(NAME example_test COMMAND example)
+# ----------  End Google Test stuff --------------------
+
+
 file(GLOB TWITSOURCES "../third_party/libtwitcurl/*.cpp")
 
 set (CMAKE_CXX_FLAGS "-std=c++14 -Wall")
@@ -33,6 +73,12 @@ add_executable(scale_test scale_test.cc)
 TARGET_LINK_LIBRARIES(scale_test scale brewhub)
 
 add_executable(serial_test serial_test.cc)
+
+add_executable(brew_types_test brew_types_test.cc)
+target_link_libraries(brew_types_test brewhub gtest_main)
+add_test(NAME brew_types_test COMMAND brew_types_test)
+
+
 
 # set(wxWidgets_CONFIGURATION mswu)
 # find_package(wxWidgets COMPONENTS core base REQUIRED)
