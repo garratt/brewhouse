@@ -77,6 +77,7 @@ class BrewLogger {
   static constexpr const char *kWaterVolumesLoc = "Overview!G14:G15";
   static constexpr const char *kLogRange = "Log!A2:E3";
   static constexpr const char *kWeightRange = "weights!A2:E3";
+  static constexpr const char *kBrewStateRange = "BrewState!A3:P3";
   static constexpr const char *kWeightEventFormat = "weights!B%d";
   static constexpr int kWeightEventStartRow = 4;
 

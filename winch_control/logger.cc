@@ -535,7 +535,54 @@ BrewRecipe BrewLogger::ReadRecipe() {
   return recipe;
 }
 
+std::string ToValue(bool v) {
+  if (v) {
+    return "\"1\", ";
+  }
+  return "\"0\", ";
+}
+std::string ToValue(double d) {
+  char ret[20];
+  snprintf(ret, 20, "\"%4.5lf\", ", d);
+  return ret;
+}
+std::string ToValue(uint32_t d) {
+  char ret[20];
+  snprintf(ret, 20, "\"%u\", ", d);
+  return ret;
+}
+
+
 
 void BrewLogger::LogBrewState(const BrewState &state) {
+  if (disable_for_test_) return;
+  // time, time, weight
+  timespec tm;
+  clock_gettime(CLOCK_REALTIME, &tm);
+  char values[200];
   // TODO: log each field as a column
+  // read/relative time | global time
+  // timer on | timer paused | total sec | sec left
+  // wait input | brew session loaded | stage | substage
+  // wait temp | target temp | current temp |heat on | %heat
+  // pump on
+  const char *values_format = "{\"values\":[[\"%s\", \"%ld\", ";
+  sprintf(values, values_format, ctime(&tm.tv_sec), state.read_time);
+  std::string sval(values);
+  sval += ToValue(state.brew_session_loaded);
+  sval += ToValue(state.stage);
+  sval += ToValue(state.substage);
+  sval += ToValue(state.timer_on);
+  sval += ToValue(state.timer_paused);
+  sval += ToValue(state.timer_total_seconds);
+  sval += ToValue(state.timer_seconds_left);
+  sval += ToValue(state.waiting_for_input);
+  sval += ToValue(state.waiting_for_temp);
+  sval += ToValue(state.heater_on);
+  sval += ToValue(state.current_temp);
+  sval += ToValue(state.target_temp);
+  sval += ToValue(state.percent_heating);
+  sval += ToValue(state.pump_on);
+  sval += " \"1\"]] }";  // Version
+  EnqueueMessage(kBrewStateRange, spreadsheet_id_.c_str(), sval.c_str());
 }
