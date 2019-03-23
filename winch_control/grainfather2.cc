@@ -128,7 +128,7 @@ int GrainfatherSerial::ResumeTimer() {
 }
 
 int GrainfatherSerial::LoadSession(const char *session_string) {
-  std::cout << "Sending Command to load session" << std::endl;
+  // std::cout << "Sending Command to load session " << session_string << std::endl;
   int ret = QuitSession(); // make sure there is no current session
   if (ret) return ret;
   if (loaded_session_.Load(session_string)) return -1;
@@ -372,25 +372,30 @@ int GrainfatherSerial::SendSerial(std::string to_send) {
 
 
 bool GrainfatherSerial::IsMashTemp() {
+      std::lock_guard<std::mutex> lock(state_mutex_);
   return latest_state_.stage == 1 &&
     latest_state_.waiting_for_input;
 }
 bool GrainfatherSerial::IsMashDone() {
+      std::lock_guard<std::mutex> lock(state_mutex_);
   return latest_state_.waiting_for_input &&
-    latest_state_.stage == loaded_session_.mash_temps.size();
+    latest_state_.stage == loaded_session_.mash_temps.size() + 1;
 }
 bool GrainfatherSerial::IsBoilTemp() {
+      std::lock_guard<std::mutex> lock(state_mutex_);
   // This could trigger at other times, but if we are only doing this wait
   // when we are preparing to boil, it should be fine...
-  return !latest_state_.waiting_for_temp;
-  // && latest_state_.stage == loaded_session_.mash_temps.size();
+  return !latest_state_.waiting_for_temp
+   && latest_state_.stage == loaded_session_.mash_temps.size() + 2;
 }
 
 bool GrainfatherSerial::IsBoilDone() {
+      std::lock_guard<std::mutex> lock(state_mutex_);
   return latest_state_.waiting_for_input &&
     latest_state_.stage == loaded_session_.mash_temps.size() + 2;
 }
 bool GrainfatherSerial::IsInSparge() {
+      std::lock_guard<std::mutex> lock(state_mutex_);
   return latest_state_.waiting_for_input &&
     latest_state_.stage == loaded_session_.mash_temps.size() + 1;
 }

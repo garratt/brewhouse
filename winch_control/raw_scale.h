@@ -32,11 +32,11 @@ class RawScale {
   // Then starts thread loop continously reading the scale
   // When a reading is available, (about every 100 miliseconds)
   // |callback| will be called with the weight.
-  int InitLoop(std::function<void(double, int64_t)> weight_callback,
+  virtual int InitLoop(std::function<void(double, int64_t)> weight_callback,
                        std::function<void()> error_callback);
 
   ~RawScale();
- private:
+ protected:
   Status current_status_;
   int data_fd_, sclk_fd_;
   bool reading_thread_enabled_ = false;
@@ -50,7 +50,7 @@ class RawScale {
   static constexpr int kMaxConsecutiveErrors = 10;
   bool had_fatal_error_ = false;
 
-  bool ReadOne();
+  virtual bool ReadOne();
   void RecordError(int64_t tnow);
 
   void ReadingThread();

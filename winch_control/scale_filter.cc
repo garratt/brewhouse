@@ -22,12 +22,32 @@ double ScaleFilter::GetWeight(int64_t since_time) {
 }
 
 // This function does a silly amount of blocking, but we've got lots of time...
-double ScaleFilter::GetWeightStartingNow() {
+double ScaleFilter::GetWeightStartingNow(unsigned max_points, int64_t timeout) {
+  // Wait until we see max_points points of data, or until timeout
   int64_t tnow = GetTimeMsec();
+  unsigned num_points = 0;
+  do {
+    num_points = 0;
+    if (!disable_for_test_) {
+      usleep(100000); //at least sleep for the time in between readings
+    }
+    // find out how many points we have accumulated:
+    for (unsigned i = 0; i < weight_data_.size() && i <= max_points; ++i) {
+      if (time_data_[time_data_.size() - 1 - i] < tnow) {
+        break;
+      } else {
+        num_points++;
+      }
+    }
+    // printf("%s: wait loop points: %u\n", __func__, num_points);
+  } while ((num_points < max_points) && (GetTimeMsec() - tnow < timeout));
+  if (num_points == 0) {
+    printf("We have timed out with no points!\n");
+    return 0.0;
+  }
   // How much should we wait?
   // we won't use more than kPointsForFiltering
   // measuring period * kPointsForFiltering
-  usleep(100000 * kPointsForFiltering);
   return FilterData(tnow);
 }
 
@@ -75,8 +95,16 @@ void ScaleFilter::NotifyWhenDrainComplete(std::function<void()> callback) {
 int ScaleFilter::InitLoop(std::function<void()> error_callback) {
   using std::placeholders::_1;
   using std::placeholders::_2;
-  int ret = raw_scale_.InitLoop(std::bind(&ScaleFilter::OnNewMeasurement, this, _1, _2),
-      error_callback);
+  error_callback_ = error_callback;
+  int ret;
+  if (disable_for_test_) {
+   ret = fake_scale_.InitLoop(std::bind(&ScaleFilter::OnNewMeasurement, this, _1, _2),
+      std::bind(&ScaleFilter::OnScaleError, this));
+
+  } else {
+   ret = raw_scale_.InitLoop(std::bind(&ScaleFilter::OnNewMeasurement, this, _1, _2),
+      std::bind(&ScaleFilter::OnScaleError, this));
+  }
   if (ret == 0) {
     looping_ = true;
   } else {
@@ -98,6 +126,14 @@ ScaleFilter::ScaleFilter(const char *calibration_file) : calibration_file_(calib
   calfile >> offset_ >> scale_;
   calfile.close();
 }
+
+void ScaleFilter::OnScaleError() {
+  looping_ = false;
+  if (error_callback_) {
+    error_callback_();
+  }
+}
+
 
 // Assume that the load cell value is linear with weight (which is the whole point right?)
 // Calibrate will need to be called with calibration_mass == 0, then again with
@@ -148,6 +184,7 @@ void ScaleFilter::OnNewMeasurement(uint32_t weight, int64_t tmeas) {
   // If we need to call periodic callback, filter for that reading
   if (periodic_callback_ && tnow - last_periodic_update_  > periodic_update_period_) {
     periodic_callback_(FilterData(0), tmeas); // TODO: should be in the middle of sequence
+    last_periodic_update_ = tnow;
   }
   // If we are monitoring for draining, and it has been long enough since we last checked
   if (draining_callback_ && tnow - last_draining_update_  > draining_update_period_) {
@@ -155,6 +192,7 @@ void ScaleFilter::OnNewMeasurement(uint32_t weight, int64_t tmeas) {
       draining_callback_();
       draining_callback_ = nullptr; // one shot call
     }
+    last_draining_update_ = tnow;
   }
   // If we are monitoring for drain complete, and it has been long enough since we last checked
   if (empty_callback_ && tnow - last_empty_update_  > empty_update_period_) {
@@ -162,6 +200,7 @@ void ScaleFilter::OnNewMeasurement(uint32_t weight, int64_t tmeas) {
       empty_callback_();
       empty_callback_ = nullptr;  // one shot call
     }
+    last_empty_update_ = tnow;
   }
   // If over max storage size, drop earliest
   if (weight_data_.size() > kMaxDataPoints) {
@@ -176,6 +215,9 @@ double ScaleFilter::FilterData(int64_t min_time_bound) {
   // TODO: explore other filtering methods...
   double wsum = 0;
   int data_points = 0;
+  if (weight_data_.size() == 0) {
+    return 0.0;
+  }
   for (unsigned i = 0; i < weight_data_.size() && i < kPointsForFiltering; ++i) {
     if (time_data_[time_data_.size() - 1 - i] < min_time_bound) {
       break;
@@ -203,8 +245,8 @@ bool ScaleFilter::CheckDraining() {
     times.push_back(time_data_[i]);
   }
   SlopeInfo info = FitSlope(weights, times);
-  // divide slope by avg error to get signal:
-  if (info.slope / info.ave_diff > kDrainingConfidenceThresh){
+  if (info.slope < kDrainingThreshGramsPerSecond &&
+      info.ave_diff < kDrainingConfidenceThresh) {
     return true;
   }
   // TODO: also check for longer trends with lower thresholds
@@ -213,6 +255,10 @@ bool ScaleFilter::CheckDraining() {
 }
 
 bool ScaleFilter::CheckEmpty() {
+  //This is a bit of a hack, but it is for testing...
+  if (disable_for_test_) {
+    fake_scale_.DrainOut();
+  }
   std::lock_guard<std::mutex> lock(data_lock_);
   // TODO: regardless of the weight, check if we are slowing down
   // For now, just check if we are below kettle+trub threshold
@@ -240,10 +286,15 @@ ScaleFilter::SlopeInfo ScaleFilter::FitSlope(std::vector<double> weights, std::v
     slope_denom += (times[i] - tmean) * (weights[i] - wmean);
     slope_num += (weights[i] - wmean)  * (weights[i] - wmean);
   }
-  double slope = slope_num / slope_denom;
+  double slope;
+  if (slope_num < 1e-6 && slope_num > -1e-6) {
+    slope = 0;
+  } else {
+    slope = slope_num / slope_denom;
+  }
   // some losses are to large to be believed.  If we are truly losing at this rate,
   // it won't matter anyway...
-  // slope is in grams(approx ml)/second, so 1L/sec is crazy high
+  // slope is in grams(approx ml)/millisecond, so 1L/sec is crazy high
   slope = slope > kMaxDrainSlope ? kMaxDrainSlope : slope;
   slope = slope < -1*kMaxDrainSlope ? -1*kMaxDrainSlope : slope;
   double diff = 0;
@@ -256,7 +307,7 @@ ScaleFilter::SlopeInfo ScaleFilter::FitSlope(std::vector<double> weights, std::v
   SlopeInfo info = {
     .num_points = weights.size(),
     .mean = wmean,
-    .slope = slope,
+    .slope = slope * 1000, // convert from ms to seconds
     .ave_diff = diff
   };
   return info;

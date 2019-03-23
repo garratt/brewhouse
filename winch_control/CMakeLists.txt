@@ -78,7 +78,9 @@ add_executable(brew_types_test brew_types_test.cc)
 target_link_libraries(brew_types_test brewhub gtest_main)
 add_test(NAME brew_types_test COMMAND brew_types_test)
 
-
+add_executable(fake_scale_test fake_scale_test.cc)
+target_link_libraries(fake_scale_test scale brewhub gtest_main)
+add_test(NAME fake_scale_test COMMAND fake_scale_test)
 
 # set(wxWidgets_CONFIGURATION mswu)
 # find_package(wxWidgets COMPONENTS core base REQUIRED)

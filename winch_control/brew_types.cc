@@ -66,6 +66,8 @@ int BrewRecipe::Load(const std::string &in) {
   // Fourth line is: "0,0,0,0,           ";  // second number is number of additions
   // we would put in addition times here, but they don't change the heating
   // fifth line, assuming no additions, is the mash steps:
+  mash_temps.clear();
+  mash_times.clear();
   for (unsigned i = 0; i < mash_steps; ++i) {
     unsigned offset = 19 * (4 + i);
     double temp;

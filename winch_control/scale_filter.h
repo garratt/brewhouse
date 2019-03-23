@@ -11,6 +11,7 @@
 #include "gpio.h"
 #include "brew_types.h"
 #include "raw_scale.h"
+#include "fake_scale.h"
 
 
 
@@ -34,7 +35,8 @@ class ScaleFilter {
   // Get an averaged weight using readings after this call was made.
   // This call will block until enough readings are available, then return the
   // weight.
-  double GetWeightStartingNow();
+  double GetWeightStartingNow(unsigned max_points = kPointsForFiltering,
+                             int64_t timeout = 100000 * kPointsForFiltering);
 
   // Sets a callback to be called at a constant reporting_interval (in milliseconds)
   // with the time of the latest measurement and a filtered weight reading.
@@ -82,12 +84,16 @@ class ScaleFilter {
   // calibration_mass == something non-zero.
   int Calibrate(double calibration_mass);
 
+  // For Testing:
+  FakeScale *GetFakeScale() { return &fake_scale_; }
+
  private:
-  double offset_ = 0, scale_ = 0;
+  double offset_ = 0, scale_ = 1.0;
   const char *calibration_file_;
   std::deque<double> weight_data_;
   std::deque<int64_t> time_data_;
   RawScale raw_scale_;
+  FakeScale fake_scale_;
   std::mutex data_lock_;
   bool looping_ = false;
 
@@ -103,6 +109,7 @@ class ScaleFilter {
   static constexpr int64_t kCheckEmptyIntervalMs = 1000;
   static constexpr int64_t kCheckDrainingIntervalMs = 500;
   // Represents slope / ave deviation from slope
+  static constexpr double kDrainingThreshGramsPerSecond = -50.0;  //TODO: check value
   static constexpr double kDrainingConfidenceThresh = 10.0;  //TODO: check value
   // Data points to use when checking for draining.  Note that each point delays
   // the warning by ~100ms.
@@ -117,6 +124,7 @@ class ScaleFilter {
   bool reading_thread_enabled_ = false;
   std::thread reading_thread_;
   std::function<void(double)> weight_callback_;
+  std::function<void()> error_callback_;
 
   // For periodic update:
   int64_t periodic_update_period_, last_periodic_update_ = 0;
@@ -130,6 +138,7 @@ class ScaleFilter {
 
   // callbacks for raw scale:
   void OnNewMeasurement(uint32_t weight, int64_t tmeas);
+  void OnScaleError();
 
   // Filter all a set of data since |min_time_bound|
   // Right now just returns the mean.

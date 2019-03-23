@@ -5,13 +5,6 @@
 #include "grainfather2.h"
 #include <iostream>
 int main(int argc, char **argv) {
-  
-  // const char *tstring = "X63.5,0.0,";
-  // double f1, f2;
-  // int obj_read = sscanf(tstring, "X%lf,%lf,", &f1, &f2);
-  // std::cout << obj_read << "  "  << f1 << "  "<< f2  << std::endl;
-  // return 0;
-
   GrainfatherSerial grainfather;
   grainfather.DisableForTest();
   if(grainfather.Init(nullptr)) {

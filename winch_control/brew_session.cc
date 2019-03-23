@@ -88,13 +88,15 @@ int BrewSession::PrepareSetup() {
 
   if(user_interface_.PleaseFinalizeForMash()) return -1;
   // Okay, we are now ready for Automation!
+  //Watch for draining
+  scale_.EnableDrainingAlarm(std::bind(&BrewSession::OnDrainAlarm, this));
   return 0;
 }
 
 int BrewSession::Mash() {
   if (grainfather_serial_.StartMash()) return -1;
   while (!grainfather_serial_.IsMashDone()) {  // wait for mash to complete
-    usleep(1000000); // sleep a second
+    SleepSeconds(1);
     // TODO: debug prints
     // std::cout << "Waiting for temp.  Target: " << full_state_.state.target_temp;
     // std::cout << "  Current: " << full_state_.state.current_temp << std::endl;
@@ -113,9 +115,8 @@ void BrewSession::GlobalPause() {
   // if (full_state_.state.timer_on) {
     // grainfather_serial_.PauseTimer();
   // }
-  grainfather_serial_.TurnPumpOff();
+  TurnPumpOff();
   grainfather_serial_.TurnHeatOff();
-  SetFlow(NO_PATH);
   // tweet out a warning!
 }
 
@@ -130,7 +131,7 @@ int BrewSession::Drain() {
   // std::cout << "Triggered: Mash is completed" << std::endl; // TODO: debug print
   if (grainfather_serial_.StartSparge()) return -1;
   // Might as well turn off valves:
-  SetFlow(NO_PATH);
+  if (TurnPumpOff()) return -1;
   brew_logger_.LogWeightEvent(WeightEvent::AfterMash, scale_.GetWeightStartingNow());
   // Now we wait for a minute or so to for fluid to drain from hoses
   SleepMinutes(1);
@@ -172,16 +173,13 @@ int BrewSession::Boil() {
 
   std::cout << "Boiling Temp reached" << std::endl;
   if (winch_controller_.LowerHops()) return -1;
-  SetFlow(KETTLE);
+  //Watch for draining, because we are opening the valves
+  if(PumpToKettle()) return -1;
   if (grainfather_serial_.StartBoil()) return -1;
-  if (grainfather_serial_.TurnPumpOn()) return -1;
-  //Watch for draining
-  scale_.EnableDrainingAlarm(std::bind(&BrewSession::OnDrainAlarm, this));
   while (!grainfather_serial_.IsBoilDone()) {  // wait for Boil temp
     usleep(1000000); // sleep a second
   }
-  if (grainfather_serial_.TurnPumpOff()) return -1;
-  SetFlow(NO_PATH);
+  if(TurnPumpOff()) return -1;
   if (grainfather_serial_.QuitSession()) return -1;
   // Wait one minute before raising hops for lines to drain
   SleepMinutes(1);
@@ -193,18 +191,42 @@ int BrewSession::Boil() {
 
 int BrewSession::Decant() {
   std::cout << "Decanting" << std::endl;
-  SetFlow(CHILLER);
+  if (PumpToCarboy()) return -1;
   ActivateChillerPump();
-  scale_.DisableDrainingAlarm();
-  if (grainfather_serial_.TurnPumpOn()) return -1;
   while (!scale_.CheckEmpty()) {  // wait kettle to empty
     usleep(500000); // sleep .5 second
   }
   DeactivateChillerPump();
-  SetFlow(NO_PATH);
-  if (grainfather_serial_.TurnPumpOff()) return -1;
+  if (TurnPumpOff()) return -1;
   return 0;
 }
+
+// TODO: make a function that handles the pump serial, valve status
+// and scale callbacks
+int BrewSession::TurnPumpOff() {
+  SetFlow(NO_PATH);
+  if (grainfather_serial_.TurnPumpOff()) return -1;
+  // with the valves shut, can safely  stop worrying about draining for the moment
+  scale_.DisableDrainingAlarm();
+  return 0;
+}
+
+int BrewSession::PumpToKettle() {
+  SetFlow(KETTLE);
+  if (grainfather_serial_.TurnPumpOn()) return -1;
+  scale_.EnableDrainingAlarm(std::bind(&BrewSession::OnDrainAlarm, this));
+  return 0;
+}
+
+int BrewSession::PumpToCarboy() {
+  scale_.DisableDrainingAlarm();
+  SetFlow(CHILLER);
+  if (grainfather_serial_.TurnPumpOn()) return -1;
+  return 0;
+}
+
+
+
 
 int BrewSession::Run(const char *spreadsheet_id) {
   if (InitSession(spreadsheet_id)) { Fail("Init"); return -1; }

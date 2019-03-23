@@ -123,6 +123,14 @@ class BrewSession {
 
   void Fail(const char *segment);
 
+  // These functions control the valves,
+  // the pump command and the DrainAlarm
+  // to put them in the correct states when
+  // We change where we want wort to go.
+  int TurnPumpOff();
+  int PumpToCarboy();
+  int PumpToKettle();
+
   // if the scale stops reading correctly
   void OnScaleError() {GlobalPause();}
 
