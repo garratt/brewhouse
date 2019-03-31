@@ -98,10 +98,8 @@ int InitIO() {
   if (SetDirection(CARBOY_VALVE, 1, 1)) return -1;
   if (SetDirection(CHILLER_VALVE, 1, 1)) return -1;
   if (SetDirection(KETTLE_VALVE, 1, 1)) return -1;
-  if (SetDirection(SET_BUTTON, 0)) return -1;
-  if (SetDirection(PUMP_BUTTON, 0)) return -1;
-  if (SetDirection(SPEAKER_IN, 0)) return -1;
   if (SetDirection(RIGHT_SLIDE_SWITCH, 0)) return -1;
+  if (SetDirection(LEFT_SLIDE_SWITCH, 0)) return -1;
   if (SetDirection(SCALE_DATA, 0)) return -1;
   if (SetDirection(SCALE_SCLK, 1, 0)) return -1;
   // SetFlow(NO_PATH);
