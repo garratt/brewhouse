@@ -27,6 +27,7 @@ class SimulatedGrainfather {
   void OnTimerDone();
   bool Update();
   void LoadSession(BrewRecipe recipe);
+  void WaitForInput(BrewState::InputReason reason);
 
   public:
   SimulatedGrainfather() { Reset();}

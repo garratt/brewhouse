@@ -72,17 +72,22 @@ void SimulatedGrainfather::Reset() {
   current_state_.target_temp = 60.0;
   current_state_.percent_heating = 0;
   current_state_.stage = 0;
-  current_state_.substage = 0;
+  current_state_.input_reason = 0;
 }
 
 void SimulatedGrainfather::LoadSession(BrewRecipe recipe) {
   recipe_ = recipe;
   current_state_.brew_session_loaded = true;
-  current_state_.waiting_for_input = true;
-  waiting_for_start_heating = true;
+  WaitForInput(BrewState::InputReason::StartHeating);
   DEBUG_LOG("Waiting for input to start heating\n");
   current_state_.target_temp = recipe_.mash_temps[0];
 }
+
+void SimulatedGrainfather::WaitForInput(BrewState::InputReason reason) {
+  current_state_.waiting_for_input = true;
+  current_state_.input_reason = reason;
+}
+
 
 void SimulatedGrainfather::Advance() {
   if (!current_state_.waiting_for_input) {
@@ -90,58 +95,48 @@ void SimulatedGrainfather::Advance() {
     return;
   }
   current_state_.waiting_for_input = false;
-  if (waiting_for_start_heating) {
-    DEBUG_LOG("Advancing to start heating\n");
-    current_state_.heater_on = true;
-    current_state_.waiting_for_temp = true;
-    current_state_.target_temp = recipe_.mash_temps[0];
-    DEBUG_LOG("Heating for first mash temp\n");
-    current_state_.stage = 1;
-    waiting_for_start_heating = false;
-    return;
-  }
-  if (waiting_for_mash_start) {
-    DEBUG_LOG("Advancing to start mashing\n");
-    current_state_.timer_total_seconds = recipe_.mash_times[0];
-    current_state_.timer_seconds_left = recipe_.mash_times[0];
-    current_state_.timer_on = true;
-    DEBUG_LOG("Starting timer for mash\n");
-    waiting_for_mash_start = false;
-    return;
-  }
-  if (waiting_for_start_sparge) {
-    DEBUG_LOG("Advancing to start sparging\n");
-    current_state_.waiting_for_input = true;
-    DEBUG_LOG("Waiting for input to finish sparge\n");
-    waiting_for_sparge_done = true;
-    waiting_for_start_sparge = false;
-    current_state_.substage++;   // TODO: verify that it incriments here...
-    return;
-  }
-  if (waiting_for_sparge_done) {
-    DEBUG_LOG("Advancing to finish sparging\n");
-    current_state_.heater_on = true;
-    current_state_.stage++;
-    current_state_.target_temp = boil_temp_;
-    current_state_.waiting_for_temp = true;
-    DEBUG_LOG("Heating for boil temp\n");
-    waiting_for_sparge_done = false;
-    return;
-  }
-  if (waiting_for_start_boil) {
-    DEBUG_LOG("Advancing to start boiling\n");
-    current_state_.timer_total_seconds = recipe_.boil_minutes;
-    current_state_.timer_seconds_left = recipe_.boil_minutes;
-    current_state_.timer_on = true;
-    DEBUG_LOG("Starting timer for boil\n");
-    waiting_for_start_boil = false;
-    return;
-  }
-  if (waiting_for_boil_done) {
-    DEBUG_LOG("Advancing to finish boil\n");
-    // not much to do here, just a confirmation.
-    waiting_for_boil_done = false;
-    Reset();
+  auto input_reason = current_state_.input_reason;
+  current_state_.input_reason = 0;
+  switch (input_reason) {
+    case BrewState::InputReason::StartHeating:
+      DEBUG_LOG("Advancing to start heating\n");
+      current_state_.heater_on = true;
+      current_state_.waiting_for_temp = true;
+      current_state_.target_temp = recipe_.mash_temps[0];
+      DEBUG_LOG("Heating for first mash temp\n");
+      current_state_.stage = 1;
+      return;
+    case BrewState::InputReason::StartMash:
+      DEBUG_LOG("Advancing to start mashing\n");
+      current_state_.timer_total_seconds = recipe_.mash_times[0];
+      current_state_.timer_seconds_left = recipe_.mash_times[0];
+      current_state_.timer_on = true;
+      DEBUG_LOG("Starting timer for mash\n");
+      return;
+    case BrewState::InputReason::StartSparge:
+      DEBUG_LOG("Advancing to start sparging\n");
+      DEBUG_LOG("Waiting for input to finish sparge\n");
+      WaitForInput(BrewState::InputReason::FinishSparge);
+      return;
+    case BrewState::InputReason::FinishSparge:
+      DEBUG_LOG("Advancing to finish sparging\n");
+      current_state_.heater_on = true;
+      current_state_.stage++;
+      current_state_.target_temp = boil_temp_;
+      current_state_.waiting_for_temp = true;
+      DEBUG_LOG("Heating for boil temp\n");
+      return;
+    case BrewState::InputReason::StartBoil:
+      DEBUG_LOG("Advancing to start boiling\n");
+      current_state_.timer_total_seconds = recipe_.boil_minutes;
+      current_state_.timer_seconds_left = recipe_.boil_minutes;
+      current_state_.timer_on = true;
+      DEBUG_LOG("Starting timer for boil\n");
+      return;
+    case BrewState::InputReason::FinishSession:
+      DEBUG_LOG("Advancing to finish boil\n");
+      // not much to do here, just a confirmation.
+      Reset();
   }
 }
 
@@ -152,10 +147,8 @@ void SimulatedGrainfather::OnDoneHeating() {
   // Heat for initial mash
   if (ms == 1) {
     // now we wait for input
-    current_state_.substage = 2;
-    current_state_.waiting_for_input = true;
     DEBUG_LOG("Waiting for input to start mash\n");
-    waiting_for_mash_start = true;
+    WaitForInput(BrewState::InputReason::StartMash);
   }
   // Heat between mash stages
   if (ms > 1 && ms <= recipe_.mash_temps.size()) {
@@ -169,9 +162,7 @@ void SimulatedGrainfather::OnDoneHeating() {
   // Done heating to boil:
   if (ms == recipe_.mash_temps.size() + 2) {
     // now we wait for input
-    current_state_.substage = 2;
-    current_state_.waiting_for_input = true;
-    waiting_for_start_boil = true;
+    WaitForInput(BrewState::InputReason::StartBoil);
     DEBUG_LOG("Waiting for input to start boil\n");
     current_state_.heater_on = true;
   }
@@ -196,10 +187,9 @@ void SimulatedGrainfather::OnTimerDone() {
   // Last mash step:
   if (ms == recipe_.mash_temps.size()) {
     current_state_.target_temp = sparge_temp_;
-    current_state_.waiting_for_input = true;
     current_state_.heater_on = true;
     current_state_.stage += 1;
-    waiting_for_start_sparge = true;
+    WaitForInput(BrewState::InputReason::StartSparge);
     DEBUG_LOG("Waiting for input to start sparge\n");
   }
   // Timing boil
@@ -207,8 +197,7 @@ void SimulatedGrainfather::OnTimerDone() {
     //We're done yo!
     current_state_.pump_on = false;
     current_state_.heater_on = false;
-    current_state_.waiting_for_input = true;
-    waiting_for_boil_done = true;
+    WaitForInput(BrewState::InputReason::FinishSession);
     DEBUG_LOG("Waiting for input to finish boil\n");
   }
 }

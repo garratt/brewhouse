@@ -29,10 +29,10 @@ class GrainfatherSerial {
   std::thread reading_thread_;
   std::function<void(BrewState)> brew_state_callback_;
   std::mutex state_mutex_;
-  BrewRecipe loaded_session_;
   bool read_error_ = false;
   int fd_;
   bool disable_for_test_ = false;
+  bool testing_communications_ = false;  // active during startup check
   SimulatedGrainfather simulated_grainfather_;
 
   int Connect(const char *path);
@@ -84,7 +84,6 @@ class GrainfatherSerial {
   // tests all the commands, to make sure they change the state.
   int TestCommands();
 
-  BrewState ParseState(char in[kStatusLength]);
   // Read status
   void ReadStatusThread();
 

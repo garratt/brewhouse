@@ -111,7 +111,7 @@ bool BrewState::operator!=(const BrewState& other) const {
   if (target_temp != other.target_temp) return true;
   if (percent_heating != other.percent_heating) return true;
   if (stage != other.stage) return true;
-  if (substage != other.substage) return true;
+  if (input_reason != other.input_reason) return true;
   if (valid != other.valid) return true;
   return false;
 }
@@ -130,7 +130,7 @@ std::string BrewState::ToString() const {
   sprintf(ret+17, "X%2.1f,%2.1f,ZZZZZZZZZZZ", target_temp, current_temp);
   sprintf(ret+34, "Y%d,%d,%d,%d,%d,%u,%u,ZZZZZ", heater_on?1:0, pump_on?1:0,
       brew_session_loaded ? 1 : 0, waiting_for_temp ? 1 : 0,
-      waiting_for_input ? 1 : 0, substage, stage);
+      waiting_for_input ? 1 : 0, input_reason, stage);
   sprintf(ret + 51, "W%d,%u,0,1,0,1,ZZZZZZZ", (int)percent_heating,
       timer_paused ? 1 : 0);
   ret[68] = '\0';
@@ -161,7 +161,7 @@ int BrewState::Load(std::string in) {
   }
   unsigned heat, pump, brew_session, waitfortemp, waitforinput;
   obj_read = sscanf(in.c_str() + 34, "Y%u,%u,%u,%u,%u,%u,%u,", &heat, &pump, &brew_session,
-      &waitfortemp, &waitforinput, &substage, &stage);
+      &waitfortemp, &waitforinput, &input_reason, &stage);
   if (obj_read != 7) {
     printf("BrewState YParsing error.\n");
     return -1;
@@ -199,7 +199,7 @@ void BrewState::Print() const {
   std::cout << "target_temp " << target_temp << std::endl;
   std::cout << "percent_heating " << percent_heating << std::endl;
   std::cout << "stage " << stage << std::endl;
-  std::cout << "substage " << substage << std::endl;
+  std::cout << "input_reason " << input_reason << std::endl;
   std::cout << "read_time " << read_time << std::endl;
   std::cout << "valid " << valid << std::endl;
 }

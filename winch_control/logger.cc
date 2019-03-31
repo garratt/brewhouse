@@ -404,6 +404,9 @@ void BrewLogger::EnqueueMessage(std::string cell_range, std::string sheet_id,
 }
 
 BrewLogger::BrewLogger() {
+  for (int i = 0; i < StageEvent::NumStates; ++i) {
+    logged_stage_[i] = false;
+  }
 }
 
 // TODO: do checks to make sure the sheet is valid
@@ -462,6 +465,26 @@ void BrewLogger::LogWeightEvent(WeightEvent event_id, double grams) {
   EnqueueMessage(range, spreadsheet_id_.c_str(), values);
 }
 
+void BrewLogger::LogStageEvent(StageEvent event_id) {
+  if (event_id >= StageEvent::NumStates || logged_stage_[event_id]) {
+    return;
+  }
+  // TODO: check for invalid values?
+  char values[30];
+  char range[15];
+  time_t t = time(NULL);
+  struct tm *tmp = localtime(&t);
+  strftime(values, 30, "{\"values\":[[\"%T\"]]}", tmp);
+  snprintf(range, 15, kStageEventFormat, kStageEventStartRow + (int)event_id);
+  EnqueueMessage(range, spreadsheet_id_.c_str(), values);
+
+  // If we just loaded the session, lets call the brew day today.
+  if (event_id == StageEvent::LoadedSession) {
+    strftime(values, 30, "{\"values\":[[\"%T\"]]}", tmp);
+    EnqueueMessage(kBrewDateLoc, spreadsheet_id_.c_str(), values);
+  }
+
+}
 
 
 void BrewLogger::LogWeight(double grams, time_t log_time) {
@@ -557,13 +580,35 @@ std::string ToValue(uint32_t d) {
 void BrewLogger::LogBrewState(const BrewState &state) {
   if (disable_for_test_) return;
   // time, time, weight
+  // Log Stage events based on the Brewstate:
+  // The input_reason is seldom non-zero, so we just
+  // try to send the info every time.  The StageEvent
+  // is only logged during the first call.
+  switch (state.input_reason) {
+    case BrewState::InputReason::StartHeating:
+      LogStageEvent(StageEvent::LoadedSession);
+      break;
+    case BrewState::InputReason::StartMash:
+      LogStageEvent(StageEvent::MashAtTemp);
+      break;
+    case BrewState::InputReason::StartSparge:
+      LogStageEvent(StageEvent::MashDone);
+      break;
+    case BrewState::InputReason::StartBoil:
+      LogStageEvent(StageEvent::BoilStart);
+      break;
+    case BrewState::InputReason::FinishSession:
+      LogStageEvent(StageEvent::BoilDone);
+      break;
+  }
+
   timespec tm;
   clock_gettime(CLOCK_REALTIME, &tm);
   char values[200];
-  // TODO: log each field as a column
+  // log each field as a column
   // read/relative time | global time
   // timer on | timer paused | total sec | sec left
-  // wait input | brew session loaded | stage | substage
+  // wait input | brew session loaded | stage | input_reason
   // wait temp | target temp | current temp |heat on | %heat
   // pump on
   const char *values_format = "{\"values\":[[\"%s\", \"%ld\", ";
@@ -571,7 +616,7 @@ void BrewLogger::LogBrewState(const BrewState &state) {
   std::string sval(values);
   sval += ToValue(state.brew_session_loaded);
   sval += ToValue(state.stage);
-  sval += ToValue(state.substage);
+  sval += ToValue(state.input_reason);
   sval += ToValue(state.timer_on);
   sval += ToValue(state.timer_paused);
   sval += ToValue(state.timer_total_seconds);

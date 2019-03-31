@@ -47,8 +47,8 @@ TEST(Serialization, Brewstate) {
   VerifyBrewstate(bs, "percent_heating");
   bs.stage = 3;
   VerifyBrewstate(bs, "stage");
-  bs.substage = 2;
-  VerifyBrewstate(bs, "substage");
+  bs.input_reason = 2;
+  VerifyBrewstate(bs, "input_reason");
   bs.read_time = 22;
   VerifyBrewstate(bs, "read_time");
   bs.valid = true;

@@ -48,7 +48,15 @@ struct BrewState {
   bool brew_session_loaded = false;
   bool heater_on = false, pump_on = false;
   double current_temp = 0, target_temp = 0, percent_heating = 0;
-  uint32_t stage = 0, substage = 0;
+  enum InputReason {
+    StartHeating = 1,
+    StartMash = 2,
+    StartSparge = 3,
+    FinishSparge = 4,
+    StartBoil = 5,
+    FinishSession = 6,
+  };
+  uint32_t stage = 0, input_reason = 0;
   bool valid = false;
 
   bool operator!=(const BrewState& other) const;

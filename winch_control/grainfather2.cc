@@ -78,7 +78,9 @@ int GrainfatherSerial::CommandAndVerify(const char *command, bool (*verify_condi
   // next.Print();
   // Have to have different conditions for advance...
   if (command == kSetButtonString) {
-    if (!next.waiting_for_input  || next.substage != latest.substage || next.stage != latest.stage ) {
+    if (!next.waiting_for_input  ||
+        next.input_reason != latest.input_reason ||
+        next.stage != latest.stage ) {
       return 0;
     }
   }
@@ -131,12 +133,12 @@ int GrainfatherSerial::LoadSession(const char *session_string) {
   // std::cout << "Sending Command to load session " << session_string << std::endl;
   int ret = QuitSession(); // make sure there is no current session
   if (ret) return ret;
-  if (loaded_session_.Load(session_string)) return -1;
   return CommandAndVerify(session_string,
       [](BrewState bs) {return bs.brew_session_loaded; });
 }
 
 int GrainfatherSerial::TestCommands() {
+  testing_communications_ = true;
   std::cout << "++++++++++++  Running Test Commands ++++++++++++++" << std::endl;
   // SetFlow(NO_PATH);
   if (TurnHeatOn() < 0) { printf("Failed to TurnHeatOn\n"); return -1; }
@@ -160,59 +162,18 @@ int GrainfatherSerial::TestCommands() {
   if (ResumeTimer() < 0) { printf("Failed to ResumeTimer\n"); return -1; }
   if (QuitSession() < 0) { printf("Failed to QuitSession\n"); return -1; }
   std::cout << "+++++++++ Done Running Test Commands ++++++++++++++" << std::endl;
+  testing_communications_ = false;
+  // TODO: we don't set testing_communications_ to false if we fail, but
+  // we should be stopping everything anyway at that point.
   return 0;
 }
 
 // Brew State:
 // T<timer_on>,<min_left+1>,<total_min>,<sec_left>
 // X<target_temp>,<current_temp>,
-// Y<heater_on>,<pump_on>,<brew_session_loaded>,<waiting_for_temp>,<waitingforinput>,<substage>,<stage>,0,
+// Y<heater_on>,<pump_on>,<brew_session_loaded>,<waiting_for_temp>,<waitingforinput>,<input_reason>,<stage>,0,
 // W<percent_heating>,<timer_paused>,0,1,0,1,
 
-
-
-BrewState GrainfatherSerial::ParseState(char in[kStatusLength]) {
-  //T1,1,2,60,ZZZZZZZX19.0,19.1,ZZZZZZY1,1,1,0,0,0,1,0,W0,0,0,1,0,1,ZZZZ
-  BrewState ret;
-  int min_left, sec_left, total_min, timer_on, obj_read;
-  obj_read = sscanf(in, "T%d,%d,%d,%d", &timer_on, &min_left, &total_min, &sec_left);
-  if (obj_read != 4) {
-    printf("BrewState TParsing error.\n");
-    return ret;
-  }
-  ret.timer_on = (timer_on == 1);
-  ret.timer_seconds_left = (min_left - 1) * 60 + sec_left;
-  ret.timer_total_seconds = 60 * total_min;
-
-  obj_read = sscanf(in + 17, "X%lf,%lf,", &ret.target_temp, &ret.current_temp);
-  if (obj_read != 2) {
-    printf("BrewState XParsing error.\n");
-    return ret;
-  }
-  unsigned heat, pump, brew_session, waitfortemp, waitforinput;
-  obj_read = sscanf(in + 34, "Y%u,%u,%u,%u,%u,%u,%u,", &heat, &pump, &brew_session,
-      &waitfortemp, &waitforinput, &ret.substage, &ret.stage);
-  if (obj_read != 7) {
-    printf("BrewState YParsing error.\n");
-    return ret;
-  }
-  ret.heater_on = (heat == 1);
-  ret.pump_on = (pump == 1);
-  ret.brew_session_loaded = (brew_session == 1);
-  ret.waiting_for_temp = (waitfortemp == 1);
-  ret.waiting_for_input = (waitforinput == 1);
-
-  unsigned timer_paused;
-  obj_read = sscanf(in + 51, "W%lf,%u", &ret.percent_heating, &timer_paused);
-  if (obj_read != 2) {
-    printf("BrewState WParsing error.\n");
-    return ret;
-  }
-  ret.timer_paused = (timer_paused == 1);
-  ret.read_time = GetTimeMsec();
-  ret.valid = true;
-  return ret;
-}
 
 // callback could be a nullptr, I don't care here
 int GrainfatherSerial::Init(std::function<void(BrewState)> callback) {
@@ -307,7 +268,7 @@ void GrainfatherSerial::ReadStatusThread() {
       std::lock_guard<std::mutex> lock(state_mutex_);
       latest_state_ = bs;
       }
-      if (brew_state_callback_) {
+      if (brew_state_callback_ && !testing_communications_) {
         brew_state_callback_(bs);
       }
     }
@@ -373,31 +334,23 @@ int GrainfatherSerial::SendSerial(std::string to_send) {
 
 bool GrainfatherSerial::IsMashTemp() {
       std::lock_guard<std::mutex> lock(state_mutex_);
-  return latest_state_.stage == 1 &&
-    latest_state_.waiting_for_input;
+  return latest_state_.input_reason == BrewState::InputReason::StartMash;
 }
 bool GrainfatherSerial::IsMashDone() {
       std::lock_guard<std::mutex> lock(state_mutex_);
-  return latest_state_.waiting_for_input &&
-    latest_state_.stage == loaded_session_.mash_temps.size() + 1;
+  return latest_state_.input_reason == BrewState::InputReason::StartSparge;
 }
 bool GrainfatherSerial::IsBoilTemp() {
       std::lock_guard<std::mutex> lock(state_mutex_);
-  // This could trigger at other times, but if we are only doing this wait
-  // when we are preparing to boil, it should be fine...
-  return !latest_state_.waiting_for_temp
-   && latest_state_.stage == loaded_session_.mash_temps.size() + 2;
+  return latest_state_.input_reason == BrewState::InputReason::StartBoil;
 }
-
 bool GrainfatherSerial::IsBoilDone() {
       std::lock_guard<std::mutex> lock(state_mutex_);
-  return latest_state_.waiting_for_input &&
-    latest_state_.stage == loaded_session_.mash_temps.size() + 2;
+  return latest_state_.input_reason == BrewState::InputReason::FinishSession;
 }
 bool GrainfatherSerial::IsInSparge() {
       std::lock_guard<std::mutex> lock(state_mutex_);
-  return latest_state_.waiting_for_input &&
-    latest_state_.stage == loaded_session_.mash_temps.size() + 1;
+  return latest_state_.input_reason == BrewState::InputReason::FinishSparge;
 }
 
 int GrainfatherSerial::StartMash() {

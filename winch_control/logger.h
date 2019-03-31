@@ -26,6 +26,15 @@ enum WeightEvent {
   AfterDecant = 7
 };
 
+enum StageEvent {
+  LoadedSession = 0,
+  MashAtTemp = 1,
+  MashStart = 2,
+  MashDone = 3,
+  BoilStart = 4,
+  BoilDone = 5,
+  NumStates = 6,
+};
 
 // This class logs data to a google spreadsheet
 class BrewLogger {
@@ -42,6 +51,7 @@ class BrewLogger {
   void LogWeightEvent(WeightEvent event_id, double grams);
 
   void LogBrewState(const BrewState &state);
+
   // Set a new spreadsheet for the session.
   // Verifies that this spreadsheet has some required components,
   // and that we are not overwriting a previous session
@@ -76,10 +86,17 @@ class BrewLogger {
   static constexpr const char *kSpargeVolumeLoc = "Overview!G15";
   static constexpr const char *kWaterVolumesLoc = "Overview!G14:G15";
   static constexpr const char *kLogRange = "Log!A2:E3";
-  static constexpr const char *kWeightRange = "weights!A2:E3";
+  static constexpr const char *kWeightRange = "weights!A16:C17";
   static constexpr const char *kBrewStateRange = "BrewState!A3:P3";
   static constexpr const char *kWeightEventFormat = "weights!B%d";
   static constexpr int kWeightEventStartRow = 4;
+  static constexpr const char *kStageEventFormat = "Overview!B%d";
+  static constexpr int kStageEventStartRow = 26;
+  static constexpr const char *kBrewDateLoc = "Overview!B4";
+
+
+  void LogStageEvent(StageEvent event);
+  bool logged_stage_[StageEvent::NumStates];
 
   std::string spreadsheet_id_;
   std::unique_ptr<oauth::OathAccess> sheets_access_, drive_access_;
