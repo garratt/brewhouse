@@ -8,6 +8,8 @@
 #include <thread>
 #include <functional>
 #include <iostream>
+#include <string>
+#include <string.h>
 #include "gpio.h"
 #include "brew_types.h"
 
@@ -16,16 +18,32 @@ RawScale::Status RawScale::GetStatus() {
    return current_status_;
 }
 
-void RawScale::RecordError(int64_t tnow) {
+void RawScale::RecordError(int64_t tnow, int error) {
+   if (error > 0) {
+     std::cout << "RawScale Read Error: " << strerror(error) << std::endl;
+   }
+   if (error == 0) {
+     std::cout << "Error: read 0 bytes" <<std::endl;
+   }
    std::lock_guard<std::mutex> lock(status_lock_);
    current_status_.errors++;
    current_status_.consecutive_errors++;
    current_status_.last_error = GetTimeMsec();
    if (current_status_.consecutive_errors > kMaxConsecutiveErrors) {
+      std::cout << "Fatal: Too many consecutive errors (";
+      std::cout << current_status_.consecutive_errors << ")" <<std::endl;
      had_fatal_error_ = true;
    }
 }
 
+void PrintRawValue(uint32_t val) {
+  std::string out;
+  uint32_t mask = 0x80000000;
+  for (int i = 0; i <32; ++i) {
+    out += (val & (mask >> i)) ? "1": "0";
+  }
+  std::cout << "Raw value: " << out << "   " << val <<  std::endl;
+}
 
 bool RawScale::ReadOne() {
   // The HX711 communicates by pulling the data line low every N Hz.
@@ -38,9 +56,11 @@ bool RawScale::ReadOne() {
     usleep(1000);
     char buffer;
     num_reads++;
+    lseek(data_fd_, 0, SEEK_SET);
     int bytes = read(data_fd_, &buffer, 1);
-    if (bytes == 0) {
-        RecordError(GetTimeMsec());
+    if (bytes <= 0) {
+        int myerr = errno;
+        RecordError(GetTimeMsec(), myerr);
         return false;
     }
     if (buffer == '0') {  // the signal is active low, so we count the # of 0 readings
@@ -50,6 +70,7 @@ bool RawScale::ReadOne() {
       valid_count = 0;
     }
     if (num_reads > kMaxReadsBeforeGiveUp) {
+      std::cout << "Fatal: num_reads > kMaxReadsBeforeGiveUp" <<std::endl;
       had_fatal_error_ = true;
       return false;
       // shut it down, we're not functioning.
@@ -62,7 +83,7 @@ bool RawScale::ReadOne() {
   // the next bit to be available on data line, so read on the falling edge.
   // timespec sleep_time = { .tv_sec = 0, . tv_nsec = 100}, rem;
   // char buffer;
-  uint32_t ret;
+  uint32_t ret = 0;
   for (int i = 0; i < kHX711DataLength; ++i) {
     // Pull high
     write(sclk_fd_, "1", 1);
@@ -74,9 +95,11 @@ bool RawScale::ReadOne() {
     // Read the value at the data pin:
 
     char buffer;
+    lseek(data_fd_, 0, SEEK_SET);
     int bytes = read(data_fd_, &buffer, 1);
-    if (bytes == 0) {
-        RecordError(tnow);
+    if (bytes <= 0) {
+        int myerr = errno;
+        RecordError(GetTimeMsec(), myerr);
         return false;
     }
     // Otherwise, the data was good. just convert from ascii:
@@ -84,6 +107,18 @@ bool RawScale::ReadOne() {
     ret += buffer - '0';
   }
   // successful read!
+  // One check here, since it is a binary thing:
+  // If we screw up the timing, we will just read ones
+  // for the rest of the data.  So we want to throw out data
+  // that ends in all ones.  Of course, sometimes this will happen
+  // naturally, so we strike a balance between throwing out to much
+  // data and too little.  The noise floor is around 1000, so throwing
+  // out 1FF (511) and above shouldn't affect the data much.
+  if ((ret ^ (ret + 1)) > kMaxConsecutiveOnesValue) {
+    RecordError(tnow, -1);
+    return false;
+  }
+  // Now we will keep the data
   {
     std::lock_guard<std::mutex> lock(status_lock_);
     current_status_.readings++;
@@ -112,6 +147,14 @@ void RawScale::ReadingThread() {
 
 int RawScale::InitLoop(std::function<void(double, int64_t)> callback,
                        std::function<void()> error_callback) {
+  if (SetDirection(SCALE_DATA, 0)) {
+    printf("Failed to set GPIO direction RawScale::Init\n");
+    return -1;
+  }
+  if (SetDirection(SCALE_SCLK, 1, 0)) {
+    printf("Failed to set GPIO direction RawScale::Init\n");
+    return -1;
+  }
   std::string sclk_path = gpio_val_path(SCALE_SCLK);
   sclk_fd_ = open(sclk_path.c_str(), O_RDWR);
   if (!sclk_fd_) {
@@ -127,6 +170,11 @@ int RawScale::InitLoop(std::function<void(double, int64_t)> callback,
   // Try to read and write from the buffers:
   char buffer;
   int bytes = read(data_fd_, &buffer, 1);
+  if (bytes <= 0) {
+    int myerr = errno;
+    RecordError(GetTimeMsec(), myerr);
+    return -1;
+  }
   if (bytes == 0) {
     printf("Failed to read during RawScale::Init\n");
     return -1;

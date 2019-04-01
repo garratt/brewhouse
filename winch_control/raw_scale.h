@@ -46,12 +46,23 @@ class RawScale {
   static constexpr int kReqNumLowReadings = 3;
   static constexpr int kMaxReadsBeforeGiveUp = 3000; // at least 3 seconds
   static constexpr int kHX711DataLength = 25;
+  // The one filter we perform:
+  // If we screw up the timing, we will just read ones
+  // for the rest of the data.  So we want to throw out data
+  // that ends in all ones.  The noise floor is around 1000,
+  // so throwing out 1FF (511) and above shouldn't affect the
+  // data much.
+  static constexpr int kMaxConsecutiveOnesValue = 0x1FF; // 511
+
   std::mutex status_lock_;
   static constexpr int kMaxConsecutiveErrors = 10;
   bool had_fatal_error_ = false;
 
   virtual bool ReadOne();
-  void RecordError(int64_t tnow);
+  // Pass in the time and the errno value.
+  // a negative errno means don't print anything,
+  // a 0 errno means print 'read 0 bytes' error
+  void RecordError(int64_t tnow, int my_errorno);
 
   void ReadingThread();
 };
