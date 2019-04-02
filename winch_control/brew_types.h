@@ -109,4 +109,3 @@ struct FullBrewState {
  Times times;
 };
 
-int64_t GetTimeMsec();

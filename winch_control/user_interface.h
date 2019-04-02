@@ -70,12 +70,13 @@ class UserInterface {
         return 0;
       }
       std::cout << "Press [Enter] when done, or [q] to quit." << std::endl;
+      WinchController winch;
       while(1) {
         printf(">");
         std::cin.getline (buf,256);
         if (strlen(buf) > 0) {
           if (buf[0] == 'r' || buf[0] == 'l' || buf[0] == 'b') {
-            raw_winch::ManualWinchControl(buf[0], buf[1], atoi(buf + 2));
+            winch.ManualWinchControl(buf[0], buf[1], atoi(buf + 2));
 
           }
           if (buf[0] == 'q') 

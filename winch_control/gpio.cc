@@ -7,6 +7,14 @@
 
 #include "gpio.h"
 
+#include <sys/time.h>   // gettimeofday
+
+int64_t GetTimeMsec() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
 char path_buffer[50];
 
 std::string gpio_val_path(uint8_t pin) {
@@ -100,6 +108,7 @@ int InitIO() {
   if (SetDirection(KETTLE_VALVE, 1, 1)) return -1;
   if (SetDirection(RIGHT_SLIDE_SWITCH, 0)) return -1;
   if (SetDirection(LEFT_SLIDE_SWITCH, 0)) return -1;
+  if (SetDirection(TOP_SWITCH, 0)) return -1;
   if (SetDirection(SCALE_DATA, 0)) return -1;
   if (SetDirection(SCALE_SCLK, 1, 0)) return -1;
   // SetFlow(NO_PATH);

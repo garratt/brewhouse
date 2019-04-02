@@ -25,6 +25,7 @@
 
 #define LEFT_SLIDE_SWITCH 24
 #define RIGHT_SLIDE_SWITCH 22
+#define TOP_SWITCH 23  // TODO: assign this
 
 #define CHILLER_PUMP 2
 #define VALVE_ENABLE 3
@@ -64,3 +65,5 @@ int SetDirection(uint8_t pin, uint8_t direction, uint8_t value = 0);
 int ReadInput(uint8_t pin);
 
 int InitIO();
+
+int64_t GetTimeMsec();

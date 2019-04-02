@@ -3,18 +3,11 @@
 // found in the LICENSE file.
 
 #include "brew_types.h"
+#include "gpio.h"
 
 #include <deque>
 #include <iostream>
 #include <vector>
-
-#include <sys/time.h>   // gettimeofday
-
-int64_t GetTimeMsec() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
 
 void BrewRecipe::Print() const {
   std::cout << " brew session: " << session_name << std::endl;
