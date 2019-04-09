@@ -25,9 +25,12 @@ class WinchController {
   // may be shorter than the requested time.
   int RunWinches(uint32_t run_time, int left_dir, int right_dir);
 
-  bool IsRightSlideAtLimit();
-  bool IsLeftSlideAtLimit();
-  bool IsTopAtLimit();
+  int left_position = 0, right_position = 0;
+  bool enabled = true;
+  // TODO: use this function!
+  std::function<bool()> abort_func_ = nullptr;
+
+  public:
 
   int LeftGoUp(uint32_t ms);
   int LeftGoDown(uint32_t ms);
@@ -36,12 +39,12 @@ class WinchController {
   int GoLeft(uint32_t ms);
   int GoRight(uint32_t ms);
 
-  int left_position = 0, right_position = 0;
-  bool enabled = true;
-  // TODO: use this function!
-  std::function<bool()> abort_func_ = nullptr;
+  int GetLeftPos() { return left_position; }
+  int GetRightPos() { return right_position; }
 
-  public:
+  static bool IsRightSlideAtLimit();
+  static bool IsLeftSlideAtLimit();
+  static bool IsTopAtLimit();
 
   void Enable() { enabled = true; }
   void Disable() { enabled = false; }

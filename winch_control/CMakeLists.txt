@@ -72,6 +72,9 @@ TARGET_LINK_LIBRARIES(grainfather_test brewhub pthread)
 add_executable(scale_test scale_test.cc)
 TARGET_LINK_LIBRARIES(scale_test scale brewhub pthread)
 
+add_executable(physical_tests physical_tests.cc)
+TARGET_LINK_LIBRARIES(physical_tests scale brewhub pthread)
+
 add_executable(serial_test serial_test.cc)
 
 add_executable(brew_types_test brew_types_test.cc)
