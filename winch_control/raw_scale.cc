@@ -126,6 +126,8 @@ bool RawScale::ReadOne() {
     current_status_.last_read_time = tnow;
     current_status_.last_reading = ret;
   }
+  // If debugging scale values, this can be helpful:
+  // PrintRawValue(ret);
   return true;
 }
 

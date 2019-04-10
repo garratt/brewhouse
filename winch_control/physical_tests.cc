@@ -61,9 +61,9 @@ int TestRightWinch() {
   if (SetDirection(TOP_SWITCH, 0)) return -1;
   usleep(100000);
   WinchController wc;
-  if(wc.RightGoDown(900)) return -1;
+  if(wc.RightGoDown(600)) return -1;
   usleep(1000000);
-  if(wc.RightGoUp(900)) return -1;
+  if(wc.RightGoUp(600)) return -1;
   usleep(100000);
   return 0;
 }
@@ -76,31 +76,36 @@ int TestWinchRelays() {
   if (SetDirection(RIGHT_WINCH_ENABLE, 1, 0)) return -1;
   if (SetDirection(LEFT_WINCH_DIRECTION, 1, 0)) return -1;
   if (SetDirection(RIGHT_WINCH_DIRECTION, 1, 0)) return -1;
-  if (SetDirection(TOP_SWITCH, 1, 1)) return -1;
+  if (SetDirection(TOP_SWITCH, 0)) return -1;
 
-  // Should disable all the winches
-  if (SetOutput(TOP_SWITCH, 0)) return -1; 
+  // Should disable all the winches from going up
+  if (SetOpenDrain(TOP_SWITCH, 1)) return -1;
   usleep(500000);
 
-  if (SetOutput(LEFT_WINCH_ENABLE, 1)) return -1;
+  // Enable up direction, so the movement will be disabled (b/c top switch)
+  if (SetOutput(RIGHT_WINCH_DIRECTION, 1)) return -1;
   usleep(500000);
-  if (SetOutput(LEFT_WINCH_ENABLE, 0)) return -1;
 
   if (SetOutput(RIGHT_WINCH_ENABLE, 1)) return -1;
   usleep(500000);
   if (SetOutput(RIGHT_WINCH_ENABLE, 0)) return -1;
 
-  if (SetOutput(LEFT_WINCH_DIRECTION, 1)) return -1;
-  usleep(500000);
-  if (SetOutput(LEFT_WINCH_DIRECTION, 0)) return -1;
-
-  if (SetOutput(RIGHT_WINCH_DIRECTION, 1)) return -1;
   usleep(500000);
   if (SetOutput(RIGHT_WINCH_DIRECTION, 0)) return -1;
 
-  if (SetOutput(TOP_SWITCH, 1)) return -1;
+  if (SetOutput(LEFT_WINCH_DIRECTION, 1)) return -1;
   usleep(500000);
-  if (SetDirection(TOP_SWITCH, 0)) return -1;
+  // Leave left direction high (up) to disable motion (b/c top switch)
+
+  if (SetOutput(LEFT_WINCH_ENABLE, 1)) return -1;
+  usleep(500000);
+  if (SetOutput(LEFT_WINCH_ENABLE, 0)) return -1;
+
+  usleep(500000);
+  if (SetOutput(LEFT_WINCH_DIRECTION, 0)) return -1;
+
+  if (SetOpenDrain(TOP_SWITCH, 0)) return -1;
+  usleep(500000);
   return 0;
 }
 
@@ -111,21 +116,27 @@ int TestValveRelays() {
   if (SetDirection(CHILLER_VALVE, 1, 1)) return -1;
   if (SetDirection(KETTLE_VALVE, 1, 1)) return -1;
 
-  if (SetOutput(CHILLER_PUMP, 1)) return -1;
-  usleep(500000);
+  usleep(100000);
   if (SetOutput(CHILLER_PUMP, 0)) return -1;
-  if (SetOutput(VALVE_ENABLE, 1)) return -1;
   usleep(500000);
+  if (SetOutput(CHILLER_PUMP, 1)) return -1;
+  usleep(100000);
   if (SetOutput(VALVE_ENABLE, 0)) return -1;
-  if (SetOutput(CARBOY_VALVE, 1)) return -1;
   usleep(500000);
+  if (SetOutput(VALVE_ENABLE, 1)) return -1;
+  usleep(100000);
   if (SetOutput(CARBOY_VALVE, 0)) return -1;
-  if (SetOutput(CHILLER_VALVE, 1)) return -1;
   usleep(500000);
+  if (SetOutput(CARBOY_VALVE, 1)) return -1;
+  usleep(100000);
   if (SetOutput(CHILLER_VALVE, 0)) return -1;
-  if (SetOutput(KETTLE_VALVE, 1)) return -1;
   usleep(500000);
+  if (SetOutput(CHILLER_VALVE, 1)) return -1;
+  usleep(100000);
   if (SetOutput(KETTLE_VALVE, 0)) return -1;
+  usleep(500000);
+  if (SetOutput(KETTLE_VALVE, 1)) return -1;
+  usleep(100000);
   return 0;
 }
 
@@ -163,6 +174,10 @@ int main(int argc, char **argv) {
   if(TestValveRelays()) {
     printf("TestValveRelays failed!\n");
   }
+
+  TestLeftWinch();
+  TestRightWinch();
+
 
   return 0;
 }

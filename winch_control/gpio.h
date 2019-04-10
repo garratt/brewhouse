@@ -25,7 +25,7 @@
 
 #define LEFT_SLIDE_SWITCH 24
 #define RIGHT_SLIDE_SWITCH 22
-#define TOP_SWITCH 23  // TODO: assign this
+#define TOP_SWITCH 25
 
 #define CHILLER_PUMP 2
 #define VALVE_ENABLE 3

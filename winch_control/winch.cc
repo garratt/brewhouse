@@ -95,7 +95,7 @@ int WinchController::RunWinches(uint32_t run_time, int left_dir, int right_dir) 
       // Right slide switch: stops only if winches are moving right
       !((left_dir == 1 && right_dir == -1) && IsRightSlideAtLimit()) &&
       // If we lifted up the kettle, shut it down!
-      !(abort_func_())) {
+      !(abort_func_ && abort_func_())) {
     usleep(1000);
     tnow = GetTimeMsec();
   }
@@ -110,7 +110,10 @@ int WinchController::RunWinches(uint32_t run_time, int left_dir, int right_dir) 
   right_position += right_dir * (tnow - start_time);
 
   // Now just exit, Winch destructor will make sure everything is cleaned up.
-  return abort_func_() ? -1 : 0;
+  if (abort_func_) {
+    return abort_func_() ? -1 : 0;
+  }
+  return 0;
 }
 
 

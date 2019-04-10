@@ -55,7 +55,7 @@ class RawScale {
   static constexpr int kMaxConsecutiveOnesValue = 0x1FF; // 511
 
   std::mutex status_lock_;
-  static constexpr int kMaxConsecutiveErrors = 10;
+  static constexpr int kMaxConsecutiveErrors = 1000;
   bool had_fatal_error_ = false;
 
   virtual bool ReadOne();
