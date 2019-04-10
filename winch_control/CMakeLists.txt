@@ -76,7 +76,7 @@ add_executable(physical_tests physical_tests.cc)
 TARGET_LINK_LIBRARIES(physical_tests scale brewhub pthread)
 
 add_executable(manual_tests manual_tests.cc)
-TARGET_LINK_LIBRARIES(manual_tests scale brewhub)
+TARGET_LINK_LIBRARIES(manual_tests scale brewhub pthread)
 
 add_executable(serial_test serial_test.cc)
 

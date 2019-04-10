@@ -167,12 +167,12 @@ WinchController::WinchController() {
     return RunWinches(ms, 1, -1);
   }
 void WinchController::ManualWinchControl(char side, char direction, uint32_t duration_ms) {
-  if (side == 'l' && direction == 'u') RunWinches(-1,  0, duration_ms);
-  if (side == 'l' && direction == 'd') RunWinches( 1,  0, duration_ms);
-  if (side == 'r' && direction == 'u') RunWinches( 0, -1, duration_ms);
-  if (side == 'r' && direction == 'd') RunWinches( 0,  1, duration_ms);
-  if (side == 'b' && direction == 'l') RunWinches(-1,  1, duration_ms);
-  if (side == 'b' && direction == 'r') RunWinches( 1, -1, duration_ms);
+  if (side == 'l' && direction == 'u') RunWinches(duration_ms, -1,  0);
+  if (side == 'l' && direction == 'd') RunWinches(duration_ms,  1,  0);
+  if (side == 'r' && direction == 'u') RunWinches(duration_ms,  0, -1);
+  if (side == 'r' && direction == 'd') RunWinches(duration_ms,  0,  1);
+  if (side == 'b' && direction == 'l') RunWinches(duration_ms, -1,  1);
+  if (side == 'b' && direction == 'r') RunWinches(duration_ms,  1, -1);
 }
 
 // --------------------------------------------------------------------
