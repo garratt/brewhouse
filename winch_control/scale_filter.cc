@@ -105,6 +105,10 @@ int ScaleFilter::InitLoop(std::function<void()> error_callback) {
    ret = raw_scale_.InitLoop(std::bind(&ScaleFilter::OnNewMeasurement, this, _1, _2),
       std::bind(&ScaleFilter::OnScaleError, this));
   }
+
+  raw_logger_enabled_ = true;
+  raw_logger_thread_ = std::thread(&ScaleFilter::RawLoggerThread, this);
+
   if (ret == 0) {
     looping_ = true;
   } else {
@@ -126,6 +130,14 @@ ScaleFilter::ScaleFilter(const char *calibration_file) : calibration_file_(calib
   calfile >> offset_ >> scale_;
   calfile.close();
 }
+
+ScaleFilter::~ScaleFilter() {
+  raw_logger_enabled_ = false;
+  if (raw_logger_thread_.joinable()) {
+    raw_logger_thread_.join();
+  }
+}
+
 
 void ScaleFilter::OnScaleError() {
   looping_ = false;
@@ -231,7 +243,7 @@ double ScaleFilter::FilterData(int64_t min_time_bound) {
 // This function has no locking because it is private and only called
 // on the same thread that alters the data.
 bool ScaleFilter::CheckDraining() {
-  if (weight_data_.size() == 0) return false;
+  if (weight_data_.size() < kPointsToCheckForDrain) return false;
   // Fit line to data:
   // mx = average(weight_data_)
   // my = average(time_data_)
@@ -247,6 +259,8 @@ bool ScaleFilter::CheckDraining() {
   SlopeInfo info = FitSlope(weights, times);
   if (info.slope < kDrainingThreshGramsPerSecond &&
       info.ave_diff < kDrainingConfidenceThresh) {
+    std::cout << "Slope was: " << info.slope << " > " << kDrainingThreshGramsPerSecond 
+              << " grams/sec" << std::endl;
     return true;
   }
   // TODO: also check for longer trends with lower thresholds
@@ -312,4 +326,48 @@ ScaleFilter::SlopeInfo ScaleFilter::FitSlope(std::vector<double> weights, std::v
   };
   return info;
 }
+
+void ScaleFilter::RawLoggerThread() {
+  int64_t last_time = 0;
+  std::vector<double> weights;
+  std::vector<int64_t> times;
+  while (raw_logger_enabled_) {
+    weights.clear();
+    times.clear();
+    {
+      std::lock_guard<std::mutex> lock(data_lock_);
+      if (time_data_.size() && time_data_.back() > last_time) {
+        ssize_t i = time_data_.size() - 1;
+        while (i >= 0 && time_data_[i] > last_time) {
+          weights.push_back(weight_data_[i]);
+          times.push_back(time_data_[i]);
+          --i;
+        }
+        // aur local vector now has a reverse order of the last n data points
+      }
+    }
+    if (weights.size() == 0) {
+      usleep(1000000);
+      continue;
+    }
+    // we have some info to write:
+    std::fstream raw_log_file;
+    raw_log_file.open(kRawLogFile, std::fstream::out | std::fstream::app);
+    if(!raw_log_file.is_open()) {
+      printf("Failed to open raw log file at %s\n", kRawLogFile);
+      return;
+    }
+    last_time = times[0];
+    for (size_t i = 0; i < weights.size(); ++i) {
+      raw_log_file << times.back() << " " << weights.back()
+        << " " << ToGrams(weights.back()) << std::endl;
+      times.pop_back();
+      weights.pop_back();
+    }
+    raw_log_file.close();
+    usleep(1000000);
+  } // end while
+}
+
+
 

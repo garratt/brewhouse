@@ -63,6 +63,7 @@ class BrewLogger {
   void DisableForTest() { disable_for_test_ = true; }
 
   BrewRecipe ReadRecipe();
+  uint32_t GetDrainTime();
 
  private:
   static constexpr const char *kSheetsScope = "https://www.googleapis.com/auth/spreadsheets";
@@ -79,12 +80,13 @@ class BrewLogger {
   static constexpr const char *kMashTimesLoc = "Overview!H5:H9";
   static constexpr const char *kMashTempsLoc = "Overview!G5:G9";
   static constexpr const char *kBoilTimeLoc = "Overview!G11";
+  static constexpr const char *kDrainTimeLoc = "Overview!G12";
   static constexpr const char *kGrainWeightLoc = "Overview!B7";
   static constexpr const char *kHopsWeightLoc = "Overview!C15";
   static constexpr const char *kHopsTypeLoc = "Overview!A15";
-  static constexpr const char *kInitialVolumeLoc = "Overview!G14";
-  static constexpr const char *kSpargeVolumeLoc = "Overview!G15";
-  static constexpr const char *kWaterVolumesLoc = "Overview!G14:G15";
+  static constexpr const char *kInitialVolumeLoc = "Overview!G15";
+  static constexpr const char *kSpargeVolumeLoc = "Overview!G16";
+  static constexpr const char *kWaterVolumesLoc = "Overview!G15:G16";
   static constexpr const char *kLogRange = "Log!A2:E3";
   static constexpr const char *kWeightRange = "weights!A16:C17";
   static constexpr const char *kBrewStateRange = "BrewState!A3:P3";

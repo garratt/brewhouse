@@ -160,13 +160,14 @@ int TestLimitSwitches() {
     if (WinchController::IsRightSlideAtLimit()) limits_closed[0] = true;
     if (WinchController::IsLeftSlideAtLimit()) limits_closed[1] = true;
     if (WinchController::IsTopAtLimit()) limits_closed[2] = true;
-    usleep(1000);
+    usleep(100000);
   }
   return 0;
 }
 
 int main(int argc, char **argv) {
-
+  TestLimitSwitches();
+  return 0;
   if(TestWinchRelays()) {
     printf("TestWinchRelays failed!\n");
   }

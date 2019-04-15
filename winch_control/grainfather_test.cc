@@ -6,7 +6,7 @@
 #include <iostream>
 int main(int argc, char **argv) {
   GrainfatherSerial grainfather;
-  grainfather.DisableForTest();
+  // grainfather.DisableForTest();
   if(grainfather.Init(nullptr)) {
     printf("failed to init\n");
     return 1;

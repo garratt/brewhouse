@@ -17,6 +17,7 @@ using std::placeholders::_1;
 using std::placeholders::_2;
 
 int BrewSession::InitSession(const char *spreadsheet_id) {
+  printf("Initializing session\n");
   // ------------------------------------------------------------------
   // Initialize the logger, which reads from the google sheet
   int logger_status = brew_logger_.SetSession(spreadsheet_id);
@@ -45,7 +46,11 @@ int BrewSession::InitSession(const char *spreadsheet_id) {
   // ------------------------------------------------------------------
   // Initialize the Grainfather serial interface
   // Make sure things are working
-  grainfather_serial_.Init(std::bind(&BrewLogger::LogBrewState, &brew_logger_, _1));
+  if (grainfather_serial_.Init(std::bind(&BrewLogger::LogBrewState, &brew_logger_, _1)) < 0) {
+    printf("Grainfather connection did not initialize correctly\n");
+    return -1;
+  }
+
   if(grainfather_serial_.TestCommands() < 0) {
     printf("Grainfather serial interface did not pass tests.\n");
     return -1;
@@ -57,7 +62,9 @@ int BrewSession::InitSession(const char *spreadsheet_id) {
     std::cout<<"Failed to Load Brewing Session into Grainfather. Exiting" <<std::endl;
     return -1;
   }
+  drain_duration_s_ = brew_logger_.GetDrainTime() * 60;
   // Okay, initializations complete!
+  printf("Initialization complete.\n");
   return 0;
 }
 
@@ -65,6 +72,8 @@ int BrewSession::InitSession(const char *spreadsheet_id) {
 
 int BrewSession::PrepareSetup() {
   user_interface_.PleaseFillWithWater(brew_recipe_.initial_volume_liters);
+
+  printf("Initializing session\n");
   brew_logger_.LogWeightEvent(WeightEvent::InitWater, scale_.GetWeightStartingNow());
 
   if (grainfather_serial_.HeatForMash()) return -1;
@@ -74,11 +83,9 @@ int BrewSession::PrepareSetup() {
   // Get weight with water and winch
   brew_logger_.LogWeightEvent(WeightEvent::InitRig, scale_.GetWeightStartingNow());
 
+  std::cout << "Waiting for temp. " << std::endl;
   while (!grainfather_serial_.IsMashTemp()) {  // wait for temperature
     usleep(1000000); // sleep a second
-    // TODO: debug prints
-    // std::cout << "Waiting for temp.  Target: " << full_state_.state.target_temp;
-    // std::cout << "  Current: " << full_state_.state.current_temp << std::endl;
   }
 
   // The OnMashTemp should just turn the buzzer off.
@@ -88,13 +95,16 @@ int BrewSession::PrepareSetup() {
 
   if(user_interface_.PleaseFinalizeForMash()) return -1;
   // Okay, we are now ready for Automation!
-  //Watch for draining
-  scale_.EnableDrainingAlarm(std::bind(&BrewSession::OnDrainAlarm, this));
   return 0;
 }
 
 int BrewSession::Mash() {
   if (grainfather_serial_.StartMash()) return -1;
+  // Sleep while the pump starts
+  SleepSeconds(5);
+
+  //Watch for draining
+  scale_.EnableDrainingAlarm(std::bind(&BrewSession::OnDrainAlarm, this));
   while (!grainfather_serial_.IsMashDone()) {  // wait for mash to complete
     SleepSeconds(1);
     // TODO: debug prints
@@ -150,7 +160,7 @@ int BrewSession::Drain() {
   // After weight has settled from lifting the mash out
   brew_logger_.LogWeightEvent(WeightEvent::AfterLift, scale_.GetWeightStartingNow());
   // Drain for 45 minutes // TODO: detect drain stopping
-  SleepMinutes(45);
+  SleepMinutes(drain_duration_s_);
   std::cout << "Draining is complete" << std::endl;
   brew_logger_.LogWeightEvent(WeightEvent::AfterDrain, scale_.GetWeightStartingNow());
   if (winch_controller_.MoveToSink()) return -1;

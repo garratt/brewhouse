@@ -43,12 +43,13 @@ endif()
 
 file(GLOB TWITSOURCES "../third_party/libtwitcurl/*.cpp")
 
-set (CMAKE_CXX_FLAGS "-std=c++14 -Wall")
+set (CMAKE_CXX_FLAGS "-std=c++14 -Wall -g")
 set (CMAKE_EXE_LINKER_FLAGS "-lcurl -lpthread")
 add_library(twitcurl STATIC ${TWITSOURCES})
 
 
 add_library(scale raw_scale.cc scale_filter.cc)
+TARGET_LINK_LIBRARIES(scale pthread)
 
 
 add_library(brewhub SimulatedGrainfather.cc valves.cc brew_types.cc grainfather2.cc brew_session.cc winch.cc gpio.cc logger.h logger.cc)

@@ -469,6 +469,8 @@ void BrewLogger::LogStageEvent(StageEvent event_id) {
   if (event_id >= StageEvent::NumStates || logged_stage_[event_id]) {
     return;
   }
+  logged_stage_[event_id] = true;
+
   // TODO: check for invalid values?
   char values[30];
   char range[15];
@@ -528,6 +530,9 @@ BrewRecipe fake_recipe = {
  .sparge_liters = 0.5 };
 
 
+uint32_t BrewLogger::GetDrainTime() {
+  return atoi(GetValue(kDrainTimeLoc).c_str());
+}
 
 // TODO: Add hops amount and type
 BrewRecipe BrewLogger::ReadRecipe() {

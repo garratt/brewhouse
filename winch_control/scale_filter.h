@@ -84,6 +84,8 @@ class ScaleFilter {
   // calibration_mass == something non-zero.
   int Calibrate(double calibration_mass);
 
+  ~ScaleFilter();
+
   // For Testing:
   FakeScale *GetFakeScale() { return &fake_scale_; }
 
@@ -113,7 +115,7 @@ class ScaleFilter {
   static constexpr double kDrainingConfidenceThresh = 10.0;  //TODO: check value
   // Data points to use when checking for draining.  Note that each point delays
   // the warning by ~100ms.
-  static constexpr int kPointsToCheckForDrain = 10;
+  static constexpr int kPointsToCheckForDrain = 30;
   // Below this weight, we declare the grainfather empty
   static constexpr double kEmptyThresholdGrams = 9000;
   // Maximum drainage rate we believe.  Anything more is too big.
@@ -121,8 +123,11 @@ class ScaleFilter {
 
   bool disable_for_test_ = false;
 
-  bool reading_thread_enabled_ = false;
-  std::thread reading_thread_;
+  static constexpr const char *kRawLogFile = "./weight_data.txt";
+  bool raw_logger_enabled_ = false;
+  std::thread raw_logger_thread_;
+  void RawLoggerThread();
+
   std::function<void(double)> weight_callback_;
   std::function<void()> error_callback_;
 

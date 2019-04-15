@@ -96,7 +96,6 @@ class BrewSession {
   int64_t drain_duration_s_ = 45 * 60;  // loaded from spreadsheet
   // std::string spreadsheet_id_;
   GrainfatherSerial grainfather_serial_;
-  FullBrewState full_state_;
   WinchController winch_controller_;
   // WeightLimiter weight_limiter_;
   BrewLogger brew_logger_;
@@ -132,10 +131,16 @@ class BrewSession {
   int PumpToKettle();
 
   // if the scale stops reading correctly
-  void OnScaleError() {GlobalPause();}
+  void OnScaleError() {
+    std::cout << "Error! Scale Error was triggered!" << std::endl;
+    GlobalPause();
+  }
 
   // If we are losing wort
-  void OnDrainAlarm() {GlobalPause();}
+  void OnDrainAlarm() {
+    std::cout << "Error! Draining Alarm was triggered!" << std::endl;
+    GlobalPause();
+  }
 
   // Not to be used for precise timing!
   void SleepMinutes(int minutes) {

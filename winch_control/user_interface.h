@@ -29,6 +29,7 @@ class UserInterface {
           return -1;
         }
       }
+      std::cout << "Great, thanks!  Moving on..." <<std::endl;
       return 0;
     }
 

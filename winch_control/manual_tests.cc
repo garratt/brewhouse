@@ -31,6 +31,10 @@ int main(int argc, char **argv) {
   if (argc < 2) return 0;
 
   GrainfatherSerial gs;
+  if (gs.Init(nullptr) < 0) {
+    printf("Grainfather connection did not initialize correctly\n");
+    return -1;
+  }
   if (argv[1][0] == 'S') {
     gs.TurnHeatOn();
     usleep(1000000);
@@ -40,11 +44,15 @@ int main(int argc, char **argv) {
 
   if (argv[1][0] == 'P') {
     gs.TurnPumpOn();
-    usleep(1000000);
+    usleep(5000000);
     gs.TurnPumpOff();
     return 0;
   }
 
+  if (argv[1][0] == 'q') {
+    gs.QuitSession();
+    return 0;
+  }
   if (argv[1][0] == 'p') {
     ActivateChillerPump();
     usleep(1000000);

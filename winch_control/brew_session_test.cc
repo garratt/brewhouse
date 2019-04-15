@@ -7,13 +7,13 @@
 int main(int argc, char **argv) {
   BrewSession session;
 
-  session.SetOfflineTest();
-  session.SetFakeGrainFather();
-  session.SetFakeWinch();
-  session.SetFakeScale();
-  session.SetZippyTime();
-  session.BypassUserInterface();
+  // session.SetOfflineTest();
+  // session.SetFakeGrainFather();
+  // session.SetFakeWinch();
+  // session.SetFakeScale();
+  // session.SetZippyTime();
+  // session.BypassUserInterface();
 
-  session.Run("");
+  session.Run("1mgoqF94u_d-Ai0f22Yza0wH4_0OSuHhLmXeSwA5GPAI");
   return 0;
 }

@@ -4,7 +4,7 @@
 
 #include "winch.h"
 
-
+#include <iostream>
 
 // Right slide switch: no effect on winches
 // Right top switch: Stops both winches from going up
@@ -91,7 +91,8 @@ int WinchController::RunWinches(uint32_t run_time, int left_dir, int right_dir) 
       // Left slide switch: stops left winch from going up
       !(left_dir == -1 && IsLeftSlideAtLimit()) &&
       // Right top switch: Stops both winches from going up
-      !((left_dir == -1 || right_dir == -1) && IsTopAtLimit()) &&
+      // TODO: account for the stopping, but don't kill the movement
+      // !((left_dir == -1 || right_dir == -1) && IsTopAtLimit()) &&
       // Right slide switch: stops only if winches are moving right
       !((left_dir == 1 && right_dir == -1) && IsRightSlideAtLimit()) &&
       // If we lifted up the kettle, shut it down!
@@ -182,8 +183,9 @@ void WinchController::ManualWinchControl(char side, char direction, uint32_t dur
 
 int WinchController::RaiseToDrain_1() {
   // Assumes we are in the mash state
-  if (RightGoUp(600)) { // Go up until the top has cleared.
+  if (RightGoUp(300)) { // Go up until the top has cleared.
     // We stop here to se if we are caught.
+    std::cout << "Error! Failed to raise up!" << std::endl;
     return -1;
   }
   return 0;
@@ -192,6 +194,7 @@ int WinchController::RaiseToDrain_1() {
 int WinchController::RaiseToDrain_2() {
   // Assumes we are in the mash state
   if (RightGoUp(1500)) { // go up until we are close to the top of the kettle
+    std::cout << "Error! Failed to raise up (2)!" << std::endl;
     return -1;
   }
   return 0;
@@ -199,14 +202,27 @@ int WinchController::RaiseToDrain_2() {
 
 int WinchController::MoveToSink() {
   // Raise to limit:
-  if (RightGoUp(900) < 0) return -1;
+  if (RightGoUp(900) < 0){
+    std::cout << "Error! Failed to raise up for move to sink!" << std::endl;
+    return -1;
+  }
   // Lower a little:
-  if (RightGoDown(100) < 0) return -1;
+  if (RightGoDown(100) < 0) {
+    std::cout << "Error! Failed to lower for move to sink!" << std::endl;
+    return -1;
+  }
   // Now scoot over using both winches:
-  if (GoRight(3000) < 0) return -1; // This will quit early when it hits the limit switch
+  if (GoRight(3000) < 0) {
+    std::cout << "Error! Failed to go right for move to sink!" << std::endl;
+    return -1;
+  }// This will quit early when it hits the limit switch
 
   // Now we are over the sink, lower away!
-  return RightGoDown(3500);
+  if (RightGoDown(3500) < 0) {
+    std::cout << "Error! Failed to lower into the sink!" << std::endl;
+    return -1;
+  }
+  return 0;
 }
 
 int WinchController::LowerHops() {
