@@ -15,6 +15,16 @@
 
 
 
+struct SlopeInfo {
+  size_t num_points = 0;
+  double mean = 0, slope = 0, ave_diff = 0;
+  double biggest_change = 0;
+};
+
+  // Maximum drainage rate we believe.  Anything more is too big.
+  static constexpr double kMaxDrainSlope = 500; // ml per second
+SlopeInfo FitSlope(std::vector<double> weights, std::vector<int64_t> times);
+
 // We have 3 uses of the scale:
 // to log accurate weights at specific times
 // To measure changes in weight over time, to characterize processes
@@ -113,13 +123,12 @@ class ScaleFilter {
   // Represents slope / ave deviation from slope
   static constexpr double kDrainingThreshGramsPerSecond = -50.0;  //TODO: check value
   static constexpr double kDrainingConfidenceThresh = 10.0;  //TODO: check value
+  static constexpr double kTotalLossThreshold = 200.0;  //TODO: check value
   // Data points to use when checking for draining.  Note that each point delays
   // the warning by ~100ms.
   static constexpr int kPointsToCheckForDrain = 30;
   // Below this weight, we declare the grainfather empty
   static constexpr double kEmptyThresholdGrams = 9000;
-  // Maximum drainage rate we believe.  Anything more is too big.
-  static constexpr double kMaxDrainSlope = 500; // ml per second
 
   bool disable_for_test_ = false;
 
@@ -155,13 +164,6 @@ class ScaleFilter {
 
   inline double ToGrams(uint32_t raw) { return ((double)raw - offset_) * scale_;}
 
-
-  struct SlopeInfo {
-    size_t num_points;
-    double mean, slope, ave_diff;
-  };
-
-  SlopeInfo FitSlope(std::vector<double> weights, std::vector<int64_t> times);
 };
 
 

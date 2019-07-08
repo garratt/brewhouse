@@ -3,19 +3,19 @@ project(brewhouse)
 
 # -----------  Google Test -----------------------------------
 # Download and unpack googletest at configure time
-configure_file(CMakeLists.txt.in googletest-download/CMakeLists.txt)
-execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
-  RESULT_VARIABLE result
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
-if(result)
-  message(FATAL_ERROR "CMake step for googletest failed: ${result}")
-endif()
-execute_process(COMMAND ${CMAKE_COMMAND} --build .
-  RESULT_VARIABLE result
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
-if(result)
-  message(FATAL_ERROR "Build step for googletest failed: ${result}")
-endif()
+#configure_file(CMakeLists.txt.in googletest-download/CMakeLists.txt)
+#execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
+#  RESULT_VARIABLE result
+#  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
+#if(result)
+#  message(FATAL_ERROR "CMake step for googletest failed: ${result}")
+#endif()
+#execute_process(COMMAND ${CMAKE_COMMAND} --build .
+#  RESULT_VARIABLE result
+#  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/googletest-download )
+#if(result)
+#  message(FATAL_ERROR "Build step for googletest failed: ${result}")
+#endif()
 
 # Prevent overriding the parent project's compiler/linker
 # settings on Windows
@@ -72,6 +72,9 @@ TARGET_LINK_LIBRARIES(grainfather_test brewhub pthread)
 
 add_executable(scale_test scale_test.cc)
 TARGET_LINK_LIBRARIES(scale_test scale brewhub pthread)
+
+add_executable(scale_filter_test scale_filter_test.cc)
+TARGET_LINK_LIBRARIES(scale_filter_test scale brewhub pthread)
 
 add_executable(physical_tests physical_tests.cc)
 TARGET_LINK_LIBRARIES(physical_tests scale brewhub pthread)

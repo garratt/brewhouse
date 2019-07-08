@@ -258,7 +258,8 @@ bool ScaleFilter::CheckDraining() {
   }
   SlopeInfo info = FitSlope(weights, times);
   if (info.slope < kDrainingThreshGramsPerSecond &&
-      info.ave_diff < kDrainingConfidenceThresh) {
+      info.ave_diff < kDrainingConfidenceThresh &&
+      info.biggest_change < kTotalLossThreshold) {
     std::cout << "Slope was: " << info.slope << " > " << kDrainingThreshGramsPerSecond 
               << " grams/sec" << std::endl;
     return true;
@@ -281,7 +282,7 @@ bool ScaleFilter::CheckEmpty() {
   return ToGrams(weight_data_.back()) < kEmptyThresholdGrams;
 }
 
-ScaleFilter::SlopeInfo ScaleFilter::FitSlope(std::vector<double> weights, std::vector<int64_t> times) {
+SlopeInfo FitSlope(std::vector<double> weights, std::vector<int64_t> times) {
   // run = (numpy.array(range(window))-numpy.mean(range(window))) / 100.0
   // ...:     s0 = run * (r1 - m1)
   // ...:     s1 = (r1-m1)*(r1-m1)
@@ -318,11 +319,27 @@ ScaleFilter::SlopeInfo ScaleFilter::FitSlope(std::vector<double> weights, std::v
     diff += err > 0 ? err : -1.0 * err; // abs(err)
   }
   diff /= weights.size();
+
+  // calculate max and min:
+  double wmin = weights[0], wmax = weights[0];
+  bool slope_down = false; // if lowest value comes after highest value
+  for (double w : weights) {
+      if (w < wmin) {
+          wmin = w;
+          slope_down = true;
+      }
+      if (w > wmax) {
+          wmax = w;
+          slope_down = false;
+      }
+  }
+
   SlopeInfo info = {
     .num_points = weights.size(),
     .mean = wmean,
     .slope = slope * 1000, // convert from ms to seconds
-    .ave_diff = diff
+    .ave_diff = diff,
+    .biggest_change = slope_down ? wmin - wmax : wmax - wmin,
   };
   return info;
 }
