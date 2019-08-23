@@ -1,0 +1,30 @@
+Plan for feed forward control
+
+0) Model probes against each other
+Put both probes in water bath for day
+log temps
+
+put probes in known water temp. log how long it takes for probes to read value
+
+1)  Model heat loss/gain
+  Depends on:
+    Container
+    volume
+    pump status
+    temp differential
+
+  run logging with two probes
+    With container, volume, pump constant:
+      temp_1(t + 1) = temp_1(t) + Kd * (temp_0(t) - temp_1(t))
+
+    Is linear function of temperature diff?
+
+  Hook up scale
+    Measure weight of water -> volume
+    water adds thermal mass (linear) and diffusion area (linear with offset)
+      cylinder -> vol = h*r^2
+                  area = 2*r^2 + h*2*pi*r
+
+      all should change Kd.
+
+
